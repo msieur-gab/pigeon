@@ -574,12 +574,7 @@ async function handleRestoreImage(e) {
         const payload = await stego.decodeFile(file);
         identity.restoreFromPayload(payload);
 
-        // Use the soul bird image as avatar
-        const { imageData } = await stego.loadImage(file);
-        const avatar = stego.toThumbnail(imageData);
-        identity.setAvatar(avatar);
-
-        // Try to restore from server
+        // Try to restore contacts from server first
         if (sync.isConfigured()) {
             try {
                 const restored = await sync.restore();
@@ -590,6 +585,11 @@ async function handleRestoreImage(e) {
                 console.error('Restore failed:', err);
             }
         }
+
+        // Use the soul bird image as avatar (overrides server avatar)
+        const { imageData } = await stego.loadImage(file);
+        const avatar = stego.toThumbnail(imageData);
+        identity.setAvatar(avatar);
 
         navigate('home');
     } catch (err) {
@@ -672,9 +672,23 @@ async function handleOpenImage(e) {
             case 'soul':
                 if (confirm('This image contains an identity. Restore it?')) {
                     identity.restoreFromPayload(parsed.payload);
-                    // Use the soul bird image as avatar
-                    const avatar = stego.toThumbnail(imageData);
-                    identity.setAvatar(avatar);
+
+                    // Try to restore contacts from server first
+                    if (sync.isConfigured()) {
+                        try {
+                            const restored = await sync.restore();
+                            if (restored) {
+                                alert('Contacts restored from server');
+                            }
+                        } catch (err) {
+                            console.error('Restore failed:', err);
+                        }
+                    }
+
+                    // Use the soul bird image as avatar (overrides server avatar)
+                    const soulAvatar = stego.toThumbnail(imageData);
+                    identity.setAvatar(soulAvatar);
+
                     navigate('home');
                 }
                 break;
