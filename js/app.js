@@ -574,6 +574,11 @@ async function handleRestoreImage(e) {
         const payload = await stego.decodeFile(file);
         identity.restoreFromPayload(payload);
 
+        // Use the soul bird image as avatar
+        const { imageData } = await stego.loadImage(file);
+        const avatar = stego.toThumbnail(imageData);
+        identity.setAvatar(avatar);
+
         // Try to restore from server
         if (sync.isConfigured()) {
             try {
@@ -667,6 +672,9 @@ async function handleOpenImage(e) {
             case 'soul':
                 if (confirm('This image contains an identity. Restore it?')) {
                     identity.restoreFromPayload(parsed.payload);
+                    // Use the soul bird image as avatar
+                    const avatar = stego.toThumbnail(imageData);
+                    identity.setAvatar(avatar);
                     navigate('home');
                 }
                 break;
