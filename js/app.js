@@ -574,19 +574,7 @@ async function handleRestoreImage(e) {
         const payload = await stego.decodeFile(file);
         identity.restoreFromPayload(payload);
 
-        // Try to restore contacts from server first
-        if (sync.isConfigured()) {
-            try {
-                const restored = await sync.restore();
-                if (restored) {
-                    alert('Contacts restored from server');
-                }
-            } catch (err) {
-                console.error('Restore failed:', err);
-            }
-        }
-
-        // Use the soul bird image as avatar (overrides server avatar)
+        // Use the soul bird image as avatar
         const { imageData } = await stego.loadImage(file);
         const avatar = stego.toThumbnail(imageData);
         identity.setAvatar(avatar);
@@ -672,23 +660,9 @@ async function handleOpenImage(e) {
             case 'soul':
                 if (confirm('This image contains an identity. Restore it?')) {
                     identity.restoreFromPayload(parsed.payload);
-
-                    // Try to restore contacts from server first
-                    if (sync.isConfigured()) {
-                        try {
-                            const restored = await sync.restore();
-                            if (restored) {
-                                alert('Contacts restored from server');
-                            }
-                        } catch (err) {
-                            console.error('Restore failed:', err);
-                        }
-                    }
-
-                    // Use the soul bird image as avatar (overrides server avatar)
+                    // Use the soul bird image as avatar
                     const soulAvatar = stego.toThumbnail(imageData);
                     identity.setAvatar(soulAvatar);
-
                     navigate('home');
                 }
                 break;
@@ -871,8 +845,19 @@ async function syncNow() {
         alert('No server configured');
         return;
     }
-    
+
     try {
+        // If no contacts locally, try to restore from server first
+        if (contacts.getAll().length === 0 && contacts.getPending().length === 0) {
+            const restored = await sync.restore();
+            if (restored) {
+                alert('Contacts restored from server');
+                render();
+                return;
+            }
+        }
+
+        // Otherwise push local data
         await sync.push();
         alert('Sync completed');
     } catch (e) {
