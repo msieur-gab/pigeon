@@ -314,8 +314,13 @@ function renderCreateInvite() {
             <button class="btn btn-block mb-1" onclick="document.getElementById('invite-image-input').click()">Choose carrier image</button>
             <input type="file" id="invite-image-input" accept="image/*">
             <canvas id="invite-canvas" class="hidden"></canvas>
+            <label class="checkbox-row">
+                <input type="checkbox" id="invite-robust" checked>
+                <span>Compression-resistant (JPEG) - survives sharing via Telegram/WhatsApp</span>
+            </label>
             <button class="btn btn-block hidden" id="generate-invite-btn" onclick="window.app.generateInvite()">Generate invite image</button>
             <canvas id="invite-output" class="hidden"></canvas>
+            <img id="invite-output-jpeg" class="hidden output-image" alt="Encoded image">
             <a id="invite-download" class="btn btn-block hidden" download="pigeon-invite.png">Save image</a>
         </div>
     `;
@@ -324,11 +329,11 @@ function renderCreateInvite() {
 function renderSendMessage() {
     const contact = state.currentContact;
     if (!contact) return renderHome();
-    
-    const displayInfo = contact.displayName 
-        ? `${contact.name} (${contact.displayName})` 
+
+    const displayInfo = contact.displayName
+        ? `${contact.name} (${contact.displayName})`
         : contact.name;
-    
+
     return `
         ${renderHeader('send to ' + contact.name, true)}
         <div class="card">
@@ -341,8 +346,13 @@ function renderSendMessage() {
             <button class="btn btn-block mb-1" onclick="document.getElementById('send-image-input').click()">Choose carrier image</button>
             <input type="file" id="send-image-input" accept="image/*">
             <canvas id="send-canvas" class="hidden"></canvas>
+            <label class="checkbox-row">
+                <input type="checkbox" id="send-robust" checked>
+                <span>Compression-resistant (JPEG) - survives sharing via Telegram/WhatsApp</span>
+            </label>
             <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
             <canvas id="send-output" class="hidden"></canvas>
+            <img id="send-output-jpeg" class="hidden output-image" alt="Encoded image">
             <a id="send-download" class="btn btn-block hidden" download="pigeon-message.png">Save image</a>
         </div>
     `;
@@ -382,8 +392,13 @@ function renderReceivedInvite() {
             <button class="btn btn-block mb-1" onclick="document.getElementById('accept-image-input').click()">Choose carrier image</button>
             <input type="file" id="accept-image-input" accept="image/*">
             <canvas id="accept-canvas" class="hidden"></canvas>
+            <label class="checkbox-row">
+                <input type="checkbox" id="accept-robust" checked>
+                <span>Compression-resistant (JPEG) - survives sharing via Telegram/WhatsApp</span>
+            </label>
             <button class="btn btn-block hidden" id="generate-accept-btn" onclick="window.app.generateAccept()">Accept & generate reply</button>
             <canvas id="accept-output" class="hidden"></canvas>
+            <img id="accept-output-jpeg" class="hidden output-image" alt="Encoded image">
             <a id="accept-download" class="btn btn-block hidden" download="pigeon-accept.png">Save reply image</a>
         </div>
     `;
@@ -680,101 +695,149 @@ function selectContact(publicKey) {
     }
 }
 
-function generateInvite() {
+async function generateInvite() {
     const name = document.getElementById('invite-name').value.trim();
     const message = document.getElementById('invite-message').value.trim();
-    
+    const useRobust = document.getElementById('invite-robust')?.checked ?? false;
+
     if (!name) { alert('Please enter a contact name'); return; }
     if (!message) { alert('Please enter a message'); return; }
-    
+
     const canvas = document.getElementById('invite-canvas');
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
+
     try {
         const { payload, tempKey } = messages.createInvite(message);
-        const encoded = stego.encode(imageData, payload);
-        
+
         // Save pending invite
         contacts.addPending(name, tempKey);
         sync.scheduleSync();
-        
-        // Show output
-        const output = document.getElementById('invite-output');
-        output.width = canvas.width;
-        output.height = canvas.height;
-        output.getContext('2d').putImageData(encoded, 0, 0);
-        output.classList.remove('hidden');
-        
+
         const download = document.getElementById('invite-download');
-        download.href = stego.toDataURL(encoded);
+        const outputCanvas = document.getElementById('invite-output');
+        const outputJpeg = document.getElementById('invite-output-jpeg');
+
+        if (useRobust) {
+            // F5 encoding (JPEG output)
+            const result = await stego.encodeRobust(imageData, payload);
+            outputCanvas.classList.add('hidden');
+            outputJpeg.src = result.dataURL;
+            outputJpeg.classList.remove('hidden');
+            download.href = result.dataURL;
+            download.download = 'pigeon-invite.jpg';
+        } else {
+            // LSB encoding (PNG output)
+            const encoded = stego.encode(imageData, payload);
+            outputJpeg.classList.add('hidden');
+            outputCanvas.width = canvas.width;
+            outputCanvas.height = canvas.height;
+            outputCanvas.getContext('2d').putImageData(encoded, 0, 0);
+            outputCanvas.classList.remove('hidden');
+            download.href = stego.toDataURL(encoded);
+            download.download = 'pigeon-invite.png';
+        }
+
         download.classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }
 }
 
-function generateMessage() {
+async function generateMessage() {
     const message = document.getElementById('send-message').value.trim();
+    const useRobust = document.getElementById('send-robust')?.checked ?? false;
+
     if (!message) { alert('Please enter a message'); return; }
-    
+
     const canvas = document.getElementById('send-canvas');
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
+
     try {
         const payload = messages.createMessage(message, state.currentContact.publicKey);
-        const encoded = stego.encode(imageData, payload);
-        
-        const output = document.getElementById('send-output');
-        output.width = canvas.width;
-        output.height = canvas.height;
-        output.getContext('2d').putImageData(encoded, 0, 0);
-        output.classList.remove('hidden');
-        
+
         const download = document.getElementById('send-download');
-        download.href = stego.toDataURL(encoded);
+        const outputCanvas = document.getElementById('send-output');
+        const outputJpeg = document.getElementById('send-output-jpeg');
+
+        if (useRobust) {
+            // F5 encoding (JPEG output)
+            const result = await stego.encodeRobust(imageData, payload);
+            outputCanvas.classList.add('hidden');
+            outputJpeg.src = result.dataURL;
+            outputJpeg.classList.remove('hidden');
+            download.href = result.dataURL;
+            download.download = 'pigeon-message.jpg';
+        } else {
+            // LSB encoding (PNG output)
+            const encoded = stego.encode(imageData, payload);
+            outputJpeg.classList.add('hidden');
+            outputCanvas.width = canvas.width;
+            outputCanvas.height = canvas.height;
+            outputCanvas.getContext('2d').putImageData(encoded, 0, 0);
+            outputCanvas.classList.remove('hidden');
+            download.href = stego.toDataURL(encoded);
+            download.download = 'pigeon-message.png';
+        }
+
         download.classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }
 }
 
-function generateAccept() {
+async function generateAccept() {
     const name = document.getElementById('accept-name').value.trim();
     const reply = document.getElementById('accept-reply').value.trim();
-    
+    const useRobust = document.getElementById('accept-robust')?.checked ?? false;
+
     if (!name) { alert('Please enter a name'); return; }
     if (!reply) { alert('Please enter a reply'); return; }
-    
+
     const canvas = document.getElementById('accept-canvas');
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
+
     try {
         const payload = messages.createClaim(reply, state.receivedPayload.tempKey);
-        const encoded = stego.encode(imageData, payload);
-        
+
         // Extract avatar from the carrier image they sent us
-        const avatar = state.receivedImageData 
-            ? stego.toThumbnail(state.receivedImageData) 
+        const avatar = state.receivedImageData
+            ? stego.toThumbnail(state.receivedImageData)
             : null;
-        
+
         // Save contact with their display name and avatar
         contacts.add(name, state.receivedPayload.fromPublicKey, state.receivedPayload.fromName, avatar);
-        
+
         // Mark as processed
         messages.markProcessed(state.receivedPayload.hash);
         sync.scheduleSync();
-        
-        const output = document.getElementById('accept-output');
-        output.width = canvas.width;
-        output.height = canvas.height;
-        output.getContext('2d').putImageData(encoded, 0, 0);
-        output.classList.remove('hidden');
-        
+
         const download = document.getElementById('accept-download');
-        download.href = stego.toDataURL(encoded);
+        const outputCanvas = document.getElementById('accept-output');
+        const outputJpeg = document.getElementById('accept-output-jpeg');
+
+        if (useRobust) {
+            // F5 encoding (JPEG output)
+            const result = await stego.encodeRobust(imageData, payload);
+            outputCanvas.classList.add('hidden');
+            outputJpeg.src = result.dataURL;
+            outputJpeg.classList.remove('hidden');
+            download.href = result.dataURL;
+            download.download = 'pigeon-accept.jpg';
+        } else {
+            // LSB encoding (PNG output)
+            const encoded = stego.encode(imageData, payload);
+            outputJpeg.classList.add('hidden');
+            outputCanvas.width = canvas.width;
+            outputCanvas.height = canvas.height;
+            outputCanvas.getContext('2d').putImageData(encoded, 0, 0);
+            outputCanvas.classList.remove('hidden');
+            download.href = stego.toDataURL(encoded);
+            download.download = 'pigeon-accept.png';
+        }
+
         download.classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
