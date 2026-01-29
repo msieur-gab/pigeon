@@ -38,9 +38,17 @@ export function encode(jpegData, payload, key = DEFAULT_KEY) {
     const stegger = new f5stego(key);
 
     // Embed data
-    const stegoJpeg = stegger.embed(jpegData, dataToEmbed);
-
-    return stegoJpeg;
+    try {
+        const stegoJpeg = stegger.embed(jpegData, dataToEmbed);
+        return stegoJpeg;
+    } catch (e) {
+        // f5stego may throw non-Error objects or capacity errors
+        const msg = e?.message || String(e) || 'F5 encoding failed';
+        if (msg.includes('capacity') || dataToEmbed.length > 2000) {
+            throw new Error(`Payload too large (${dataToEmbed.length} bytes). Try a larger carrier image.`);
+        }
+        throw new Error(msg);
+    }
 }
 
 /**

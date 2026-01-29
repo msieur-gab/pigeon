@@ -111,11 +111,12 @@ export async function backupToImage(imageData) {
     const id = get();
     if (!id) throw new Error('No identity to backup');
 
+    // Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
+    // Avatar can be set separately after restoring
     const payload = {
         t: 'soul',
         seed: id.seed,
         name: id.name,
-        avatar: id.avatar || null,
         v: 1
     };
 
