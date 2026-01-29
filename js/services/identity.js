@@ -106,39 +106,38 @@ export function restoreFromWords(words, name = '') {
     return createFromSeed(seed, name);
 }
 
-// Backup identity to image (soul bird)
-export function backupToImage(imageData) {
-    const identity = get();
-    if (!identity) throw new Error('No identity to backup');
-    
+// Backup identity to image (soul bird) - returns Promise<{jpegData, blob, dataURL}>
+export async function backupToImage(imageData) {
+    const id = get();
+    if (!id) throw new Error('No identity to backup');
+
     const payload = {
         t: 'soul',
-        seed: identity.seed,
-        name: identity.name,
-        avatar: identity.avatar || null,
+        seed: id.seed,
+        name: id.name,
+        avatar: id.avatar || null,
         v: 1
     };
-    
-    return stego.encode(imageData, payload);
+
+    // Use F5 encoding for compression resistance
+    return stego.encodeRobust(imageData, payload);
 }
 
-// Restore identity from image (soul bird)
-export function restoreFromImage(imageData) {
-    const payload = stego.decode(imageData);
-    
+// Restore identity from already-decoded payload
+export function restoreFromPayload(payload) {
     if (payload.t !== 'soul') {
-        throw new Error('Image does not contain identity backup');
+        throw new Error('Payload does not contain identity backup');
     }
-    
+
     const seed = crypto.decodeBase64(payload.seed);
-    const identity = createFromSeed(seed, payload.name || '');
-    
+    const id = createFromSeed(seed, payload.name || '');
+
     // Restore avatar if present
     if (payload.avatar) {
         setAvatar(payload.avatar);
     }
-    
-    return identity;
+
+    return id;
 }
 
 // Clear identity (dangerous!)

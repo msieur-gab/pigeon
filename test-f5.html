@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F5 Steganography Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl-fast.min.js"></script>
+    <script src="js/vendor/f5stego.min.js"></script>
+    <style>
+        body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .section { margin: 2rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+        img { max-width: 300px; margin: 1rem 0; }
+        pre { background: #f5f5f5; padding: 1rem; overflow-x: auto; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 0.5rem 1rem; margin: 0.5rem 0; cursor: pointer; }
+        #log { max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>F5 Steganography Test</h1>
+
+    <div class="section">
+        <h2>1. Load Test Image</h2>
+        <input type="file" id="imageInput" accept="image/*">
+        <div id="imagePreview"></div>
+        <p id="imageInfo"></p>
+    </div>
+
+    <div class="section">
+        <h2>2. Encode with F5</h2>
+        <p>Test payload (similar to invite data):</p>
+        <pre id="payloadPreview"></pre>
+        <button id="encodeBtn" disabled>Encode with F5</button>
+        <div id="encodedPreview"></div>
+        <p id="encodeInfo"></p>
+    </div>
+
+    <div class="section">
+        <h2>3. Decode</h2>
+        <button id="decodeBtn" disabled>Decode F5 Image</button>
+        <pre id="decodeResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>4. Download & Re-upload Test</h2>
+        <p>Download the encoded image, then re-upload to test decoding:</p>
+        <a id="downloadLink" style="display:none">Download Encoded JPEG</a>
+        <br><br>
+        <input type="file" id="reuploadInput" accept="image/*">
+        <button id="reuploadDecodeBtn" disabled>Decode Re-uploaded Image</button>
+        <pre id="reuploadResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+    </div>
+
+    <script type="module">
+        import * as stego from './js/utils/stego.js';
+
+        const log = (msg, isError = false) => {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `<span class="${isError ? 'error' : ''}">[${time}] ${msg}</span>\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(msg);
+        };
+
+        // Test payload (simulates invite data)
+        const testPayload = {
+            type: 'invite',
+            version: 1,
+            name: 'TestUser',
+            pk: 'dGVzdC1wdWJsaWMta2V5LWJhc2U2NC1lbmNvZGVkLXN0cmluZw==',
+            spk: 'dGVzdC1zaWduaW5nLXB1YmxpYy1rZXktYmFzZTY0LWVuY29kZWQ=',
+            timestamp: Date.now()
+        };
+
+        document.getElementById('payloadPreview').textContent = JSON.stringify(testPayload, null, 2);
+        log(`Payload size: ${JSON.stringify(testPayload).length} bytes`);
+
+        let originalFile = null;
+        let encodedJpegData = null;
+
+        // Load image
+        document.getElementById('imageInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            originalFile = file;
+            log(`Loaded: ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB)`);
+
+            // Preview
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            document.getElementById('imagePreview').innerHTML = '';
+            document.getElementById('imagePreview').appendChild(img);
+
+            // Get dimensions
+            img.onload = () => {
+                document.getElementById('imageInfo').textContent =
+                    `Dimensions: ${img.naturalWidth}x${img.naturalHeight}`;
+                log(`Image dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+            };
+
+            document.getElementById('encodeBtn').disabled = false;
+        });
+
+        // Encode
+        document.getElementById('encodeBtn').addEventListener('click', async () => {
+            if (!originalFile) return;
+
+            try {
+                log('Encoding with F5...');
+                const startTime = performance.now();
+
+                const result = await stego.encodeRobust(originalFile, testPayload);
+                encodedJpegData = result.jpegData;
+
+                const elapsed = Math.round(performance.now() - startTime);
+                log(`Encoded in ${elapsed}ms. Output size: ${Math.round(encodedJpegData.length/1024)}KB`);
+
+                // Preview encoded image
+                const img = document.createElement('img');
+                img.src = result.dataURL;
+                document.getElementById('encodedPreview').innerHTML = '';
+                document.getElementById('encodedPreview').appendChild(img);
+
+                document.getElementById('encodeInfo').textContent =
+                    `Encoded JPEG: ${Math.round(encodedJpegData.length/1024)}KB`;
+
+                // Setup download
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = URL.createObjectURL(result.blob);
+                downloadLink.download = 'f5-encoded.jpg';
+                downloadLink.style.display = 'inline';
+                downloadLink.textContent = 'Download Encoded JPEG';
+
+                document.getElementById('decodeBtn').disabled = false;
+                log('Encoding successful! Ready to decode.', false);
+
+            } catch (err) {
+                log(`Encode error: ${err.message}`, true);
+                console.error(err);
+            }
+        });
+
+        // Decode
+        document.getElementById('decodeBtn').addEventListener('click', async () => {
+            if (!encodedJpegData) return;
+
+            try {
+                log('Decoding F5...');
+                const startTime = performance.now();
+
+                const decoded = stego.decode(encodedJpegData);
+
+                const elapsed = Math.round(performance.now() - startTime);
+                log(`Decoded in ${elapsed}ms`);
+
+                document.getElementById('decodeResult').innerHTML =
+                    `<span class="success">SUCCESS!</span>\n${JSON.stringify(decoded, null, 2)}`;
+
+                // Verify match
+                const match = JSON.stringify(decoded) === JSON.stringify(testPayload);
+                log(`Payload match: ${match ? 'YES' : 'NO'}`, !match);
+
+            } catch (err) {
+                log(`Decode error: ${err.message}`, true);
+                document.getElementById('decodeResult').innerHTML =
+                    `<span class="error">FAILED: ${err.message}</span>`;
+            }
+        });
+
+        // Re-upload test
+        document.getElementById('reuploadInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                document.getElementById('reuploadDecodeBtn').disabled = false;
+            }
+        });
+
+        document.getElementById('reuploadDecodeBtn').addEventListener('click', async () => {
+            const file = document.getElementById('reuploadInput').files[0];
+            if (!file) return;
+
+            try {
+                log(`Re-upload decode: ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB)`);
+                const startTime = performance.now();
+
+                const decoded = await stego.decodeFile(file);
+
+                const elapsed = Math.round(performance.now() - startTime);
+                log(`Decoded in ${elapsed}ms`);
+
+                document.getElementById('reuploadResult').innerHTML =
+                    `<span class="success">SUCCESS!</span>\n${JSON.stringify(decoded, null, 2)}`;
+
+                // Verify match
+                const match = JSON.stringify(decoded) === JSON.stringify(testPayload);
+                log(`Payload match: ${match ? 'YES' : 'NO'}`, !match);
+
+            } catch (err) {
+                log(`Re-upload decode error: ${err.message}`, true);
+                document.getElementById('reuploadResult').innerHTML =
+                    `<span class="error">FAILED: ${err.message}</span>`;
+            }
+        });
+
+        log('F5 Test ready. Load an image to begin.');
+    </script>
+</body>
+</html>
