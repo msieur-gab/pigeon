@@ -568,11 +568,12 @@ function restoreFromWords() {
 async function handleRestoreImage(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     try {
-        const { imageData } = await stego.loadImage(file);
-        identity.restoreFromImage(imageData);
-        
+        // Decode payload (F5 first, LSB fallback)
+        const payload = await stego.decodeFile(file);
+        identity.restoreFromPayload(payload);
+
         // Try to restore from server
         if (sync.isConfigured()) {
             try {
@@ -584,10 +585,10 @@ async function handleRestoreImage(e) {
                 console.error('Restore failed:', err);
             }
         }
-        
+
         navigate('home');
     } catch (err) {
-        document.getElementById('restore-status').innerHTML = 
+        document.getElementById('restore-status').innerHTML =
             `<div class="status error">${err.message}</div>`;
     }
 }
