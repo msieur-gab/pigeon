@@ -1,0 +1,21 @@
+# Test images
+*.png
+*.avif
+*.jpg
+*.jpeg
+
+# Temp files
+*.zip
+*.json
+!package.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

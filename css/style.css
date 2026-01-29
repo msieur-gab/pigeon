@@ -1,0 +1,391 @@
+:root {
+    --bg: #fff;
+    --fg: #000;
+    --muted: #666;
+    --border: #ccc;
+    --accent: #000;
+    --radius: 4px;
+}
+
+[data-theme="dark"] {
+    --bg: #111;
+    --fg: #eee;
+    --muted: #888;
+    --border: #333;
+    --accent: #fff;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+    font-size: 1rem;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+}
+
+/* Messages use serif */
+.message-text {
+    font-family: Georgia, 'Times New Roman', serif;
+}
+
+/* Layout */
+.container {
+    max-width: 32rem;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+header h1 {
+    font-size: 1rem;
+    font-weight: normal;
+}
+
+/* Buttons */
+button, .btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    font-family: inherit;
+    font-size: 1rem;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--fg);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+}
+
+button:hover, .btn:hover {
+    background: var(--fg);
+    color: var(--bg);
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+button:disabled:hover {
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.btn-block {
+    display: block;
+    width: 100%;
+}
+
+.btn-ghost {
+    border-color: transparent;
+}
+
+.btn-ghost:hover {
+    background: transparent;
+    color: var(--fg);
+    text-decoration: underline;
+}
+
+/* Forms */
+input, textarea {
+    width: 100%;
+    padding: 0.5rem;
+    font-family: inherit;
+    font-size: 1rem;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--fg);
+}
+
+textarea {
+    min-height: 6rem;
+    resize: vertical;
+}
+
+label {
+    display: block;
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+}
+
+.field {
+    margin-bottom: 1rem;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+/* Cards */
+.card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.card h2 {
+    font-size: 1rem;
+    font-weight: normal;
+    margin-bottom: 0.5rem;
+}
+
+/* Fingerprint display */
+.fingerprint {
+    font-size: 1rem;
+    padding: 0.5rem;
+    background: var(--fg);
+    color: var(--bg);
+    border-radius: var(--radius);
+    text-align: center;
+    letter-spacing: 0.1em;
+}
+
+/* Contact list */
+.contact-list {
+    list-style: none;
+}
+
+/* Empty state */
+.empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+}
+
+/* Message preview */
+.message-preview {
+    font-family: Georgia, 'Times New Roman', serif;
+    padding: 1rem;
+    border-left: 2px solid var(--border);
+    margin: 1rem 0;
+    font-style: italic;
+}
+
+/* Status messages */
+.status {
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    margin: 1rem 0;
+    font-size: 0.875rem;
+}
+
+.status.info {
+    border: 1px solid var(--border);
+}
+
+.status.error {
+    border: 1px solid var(--fg);
+}
+
+/* Screens */
+.screen {
+    display: none;
+}
+
+.screen.active {
+    display: block;
+}
+
+/* Back link */
+.back {
+    display: inline-block;
+    margin-bottom: 1rem;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.back:hover {
+    color: var(--fg);
+}
+
+/* Canvas / Image */
+canvas, .preview-image {
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 1rem 0;
+}
+
+/* Actions row */
+.actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.actions > * {
+    flex: 1;
+}
+
+/* Recovery words */
+.words {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.word {
+    padding: 0.5rem;
+    background: var(--fg);
+    color: var(--bg);
+    border-radius: var(--radius);
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+.word .num {
+    font-size: 0.625rem;
+    opacity: 0.5;
+}
+
+/* Theme toggle */
+.theme-toggle {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.theme-toggle:hover {
+    opacity: 0.7;
+}
+
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
+.mt-1 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 1rem; }
+.text-center { text-align: center; }
+.text-muted { color: var(--muted); }
+.text-small { font-size: 0.875rem; }
+
+/* Avatars */
+.avatar, .avatar-small, .avatar-large {
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.avatar {
+    width: 48px;
+    height: 48px;
+}
+
+.avatar-small {
+    width: 32px;
+    height: 32px;
+}
+
+.avatar-large {
+    width: 64px;
+    height: 64px;
+}
+
+.avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--border);
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* Identity row in home */
+.identity-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.identity-info {
+    flex: 1;
+}
+
+/* Sender info in received screens */
+.sender-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+/* Avatar setting in profile */
+.avatar-setting {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+/* Contact list with avatars */
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+
+.contact-item:hover {
+    border-color: var(--fg);
+}
+
+.contact-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.contact-item .name {
+    font-weight: normal;
+}
+
+.contact-item .display-name {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+.contact-item .fp {
+    font-size: 0.75rem;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.contact-item.pending {
+    opacity: 0.5;
+    cursor: default;
+}

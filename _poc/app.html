@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pigeon</title>
+    <script>
+        // Will be populated after nacl loads
+        window.naclUtil = {
+            decodeUTF8(s) {
+                return new TextEncoder().encode(s);
+            },
+            encodeUTF8(arr) {
+                return new TextDecoder().decode(arr);
+            },
+            encodeBase64(arr) {
+                let binary = '';
+                for (let i = 0; i < arr.length; i++) {
+                    binary += String.fromCharCode(arr[i]);
+                }
+                return btoa(binary);
+            },
+            decodeBase64(s) {
+                const binary = atob(s);
+                const arr = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    arr[i] = binary.charCodeAt(i);
+                }
+                return arr;
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl-fast.min.js"></script>
+    <script>
+        // Attach util to nacl after it loads
+        if (typeof nacl !== 'undefined') {
+            nacl.util = window.naclUtil;
+        } else {
+            console.error('TweetNaCl failed to load');
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        header h1 { font-size: 24px; }
+        header small { color: #888; font-size: 12px; }
+        
+        .screen { display: none; }
+        .screen.active { display: block; }
+        
+        .card {
+            background: #252525;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .card h2 { font-size: 16px; margin-bottom: 12px; color: #fff; }
+        .card p { font-size: 14px; color: #999; margin-bottom: 12px; }
+        
+        .fingerprint {
+            font-family: monospace;
+            background: #333;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 2px;
+            color: #7ecf7e;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: transform 0.1s, opacity 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .btn-primary { background: #4a7c59; color: white; }
+        .btn-secondary { background: #444; color: white; }
+        .btn-outline { background: transparent; border: 1px solid #555; color: #ccc; }
+        
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            font-size: 16px;
+            resize: vertical;
+        }
+        textarea { min-height: 100px; }
+        textarea:focus, input:focus { outline: none; border-color: #4a7c59; }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .field { margin-bottom: 16px; }
+        
+        .contact-list { list-style: none; }
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 14px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .contact-item:hover { background: #333; }
+        .contact-item .name { flex: 1; font-weight: 500; }
+        .contact-item .fp { font-family: monospace; font-size: 12px; color: #7ecf7e; }
+        .contact-item.pending { opacity: 0.6; }
+        .contact-item.pending .fp { color: #cfcf7e; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        
+        canvas {
+            width: 100%;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+        
+        .back-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 8px 0;
+            margin-bottom: 16px;
+        }
+        .back-btn:hover { color: #fff; }
+        
+        .message-preview {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+            font-style: italic;
+            color: #aaa;
+        }
+        
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .status.success { background: #1a3a1a; color: #7ecf7e; }
+        .status.error { background: #3a1a1a; color: #cf7e7e; }
+        .status.info { background: #1a2a3a; color: #7e9fcf; }
+        
+        .hidden { display: none !important; }
+        
+        input[type="file"] { display: none; }
+        
+        .nav-row {
+            display: flex;
+            gap: 10px;
+        }
+        .nav-row .btn { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐦 Pigeon</h1>
+            <small>Encrypted messages hidden in bird photos</small>
+        </header>
+        
+        <!-- HOME SCREEN -->
+        <div id="screen-home" class="screen active">
+            <div class="card">
+                <h2>Your Identity</h2>
+                <p>Share this fingerprint to verify it's really you</p>
+                <div class="fingerprint" id="my-fingerprint">-</div>
+            </div>
+            
+            <div class="nav-row">
+                <button class="btn btn-primary" onclick="showScreen('create-invite')">📤 New Contact</button>
+                <label class="btn btn-secondary" style="text-align:center">
+                    📥 Open Image
+                    <input type="file" id="open-image-input" accept="image/*" onchange="handleOpenImage(event)">
+                </label>
+            </div>
+            
+            <div class="card">
+                <h2>Contacts</h2>
+                <ul class="contact-list" id="contact-list">
+                    <li class="empty-state">
+                        <div class="icon">🕊️</div>
+                        <p>No contacts yet.<br>Create an invite to get started.</p>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- CREATE INVITE SCREEN -->
+        <div id="screen-create-invite" class="screen">
+            <button class="back-btn" onclick="showScreen('home')">← Back</button>
+            
+            <div class="card">
+                <h2>Create Invite</h2>
+                <p>Write your first message. It will be hidden in a bird photo.</p>
+                
+                <div class="field">
+                    <label>Contact name (for you)</label>
+                    <input type="text" id="invite-name" placeholder="Alice">
+                </div>
+                
+                <div class="field">
+                    <label>First message</label>
+                    <textarea id="invite-message" placeholder="Hey! Use this to contact me securely..."></textarea>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="fetchRandomBird('invite-canvas')">🔄 Random Bird Photo</button>
+                <button class="btn btn-outline" onclick="document.getElementById('invite-image-input').click()">📁 Choose image</button>
+                <input type="file" id="invite-image-input" accept="image/*" onchange="loadImageToCanvas(event, 'invite-canvas')">
+                
+                <canvas id="invite-canvas" class="hidden"></canvas>
+                
+                <button class="btn btn-primary hidden" id="generate-invite-btn" onclick="generateInvite()">🐦 Generate Invite Image</button>
+                
+                <canvas id="invite-output" class="hidden"></canvas>
+                <a id="invite-download" class="btn btn-primary hidden" download="pigeon-invite.png">💾 Save Image</a>
+            </div>
+        </div>
+        
+        <!-- SEND MESSAGE SCREEN -->
+        <div id="screen-send-message" class="screen">
+            <button class="back-btn" onclick="showScreen('home')">← Back</button>
+            
+            <div class="card">
+                <h2>Send to: <span id="send-to-name">-</span></h2>
+                <div class="fingerprint" id="send-to-fingerprint" style="font-size:14px; margin-bottom: 16px;">-</div>
+                
+                <div class="field">
+                    <label>Message</label>
+                    <textarea id="send-message" placeholder="Your message..."></textarea>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="fetchRandomBird('send-canvas')">🔄 Random Bird Photo</button>
+                <button class="btn btn-outline" onclick="document.getElementById('send-image-input').click()">📁 Choose image</button>
+                <input type="file" id="send-image-input" accept="image/*" onchange="loadImageToCanvas(event, 'send-canvas')">
+                
+                <canvas id="send-canvas" class="hidden"></canvas>
+                
+                <button class="btn btn-primary hidden" id="generate-send-btn" onclick="generateMessage()">🐦 Generate Message Image</button>
+                
+                <canvas id="send-output" class="hidden"></canvas>
+                <a id="send-download" class="btn btn-primary hidden" download="pigeon-message.png">💾 Save Image</a>
+            </div>
+        </div>
+        
+        <!-- RECEIVED INVITE SCREEN -->
+        <div id="screen-received-invite" class="screen">
+            <button class="back-btn" onclick="showScreen('home')">← Back</button>
+            
+            <div class="card">
+                <h2>📬 Invite Received!</h2>
+                <p>Someone wants to connect with you.</p>
+                
+                <div style="margin: 16px 0;">
+                    <label>Their fingerprint</label>
+                    <div class="fingerprint" id="invite-from-fingerprint">-</div>
+                </div>
+                
+                <div class="message-preview" id="invite-preview-message">-</div>
+                
+                <div class="field">
+                    <label>Save contact as</label>
+                    <input type="text" id="accept-name" placeholder="Bob">
+                </div>
+                
+                <div class="field">
+                    <label>Reply message</label>
+                    <textarea id="accept-reply" placeholder="Hey! Got your invite..."></textarea>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="fetchRandomBird('accept-canvas')">🔄 Random Bird Photo</button>
+                <button class="btn btn-outline" onclick="document.getElementById('accept-image-input').click()">📁 Choose image</button>
+                <input type="file" id="accept-image-input" accept="image/*" onchange="loadImageToCanvas(event, 'accept-canvas')">
+                
+                <canvas id="accept-canvas" class="hidden"></canvas>
+                
+                <button class="btn btn-primary hidden" id="generate-accept-btn" onclick="generateAccept()">✅ Accept & Generate Reply</button>
+                
+                <canvas id="accept-output" class="hidden"></canvas>
+                <a id="accept-download" class="btn btn-primary hidden" download="pigeon-accept.png">💾 Save Reply Image</a>
+            </div>
+        </div>
+        
+        <!-- RECEIVED CLAIM SCREEN -->
+        <div id="screen-received-claim" class="screen">
+            <button class="back-btn" onclick="showScreen('home')">← Back</button>
+            
+            <div class="card">
+                <h2>📬 Invite Accepted!</h2>
+                <p>Your contact has responded.</p>
+                
+                <div style="margin: 16px 0;">
+                    <label>Their fingerprint</label>
+                    <div class="fingerprint" id="claim-from-fingerprint">-</div>
+                </div>
+                
+                <div class="message-preview" id="claim-preview-message">-</div>
+                
+                <div class="status info">
+                    Verify this fingerprint matches what they see on their device!
+                </div>
+                
+                <button class="btn btn-primary" onclick="confirmClaim()">✅ Confirm & Save Contact</button>
+                <button class="btn btn-outline" onclick="rejectClaim()">❌ Reject (fingerprint mismatch)</button>
+            </div>
+        </div>
+        
+        <!-- RECEIVED MESSAGE SCREEN -->
+        <div id="screen-received-message" class="screen">
+            <button class="back-btn" onclick="showScreen('home')">← Back</button>
+            
+            <div class="card">
+                <h2>📬 Message from <span id="msg-from-name">-</span></h2>
+                <div class="fingerprint" id="msg-from-fingerprint" style="font-size:14px; margin-bottom: 16px;">-</div>
+                
+                <div class="message-preview" id="msg-content" style="font-style: normal; color: #e0e0e0; font-size: 16px;">-</div>
+                
+                <button class="btn btn-primary" onclick="replyToMessage()">↩️ Reply</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ STORAGE ============
+        const storage = {
+            get(key) {
+                const data = localStorage.getItem('pigeon_' + key);
+                return data ? JSON.parse(data) : null;
+            },
+            set(key, value) {
+                localStorage.setItem('pigeon_' + key, JSON.stringify(value));
+            }
+        };
+
+        // ============ CRYPTO ============
+        const crypto = {
+            generateKeyPair() {
+                const keyPair = nacl.box.keyPair();
+                return {
+                    publicKey: nacl.util.encodeBase64(keyPair.publicKey),
+                    secretKey: nacl.util.encodeBase64(keyPair.secretKey)
+                };
+            },
+            
+            generateSymmetricKey() {
+                return nacl.util.encodeBase64(nacl.randomBytes(32));
+            },
+            
+            fingerprint(publicKey) {
+                const words = [
+                    'castle', 'river', 'forest', 'thunder', 'crystal', 'shadow',
+                    'mountain', 'ocean', 'meadow', 'storm', 'garden', 'ember',
+                    'willow', 'falcon', 'silver', 'ancient', 'wanderer', 'twilight',
+                    'mystic', 'lunar', 'solar', 'frost', 'bloom', 'drift'
+                ];
+                const bytes = nacl.util.decodeBase64(publicKey);
+                const w1 = words[bytes[0] % words.length];
+                const w2 = words[bytes[1] % words.length];
+                const w3 = words[bytes[2] % words.length];
+                return `${w1}-${w2}-${w3}`;
+            },
+            
+            encryptSymmetric(message, keyBase64) {
+                const key = nacl.util.decodeBase64(keyBase64).slice(0, 32);
+                const nonce = nacl.randomBytes(24);
+                const messageBytes = nacl.util.decodeUTF8(message);
+                const box = nacl.secretbox(messageBytes, nonce, key);
+                return {
+                    cipher: nacl.util.encodeBase64(box),
+                    nonce: nacl.util.encodeBase64(nonce)
+                };
+            },
+            
+            decryptSymmetric(cipherBase64, nonceBase64, keyBase64) {
+                const key = nacl.util.decodeBase64(keyBase64).slice(0, 32);
+                const nonce = nacl.util.decodeBase64(nonceBase64);
+                const cipher = nacl.util.decodeBase64(cipherBase64);
+                const decrypted = nacl.secretbox.open(cipher, nonce, key);
+                if (!decrypted) throw new Error('Decryption failed');
+                return nacl.util.encodeUTF8(decrypted);
+            },
+            
+            encryptBox(message, theirPublicKey, mySecretKey) {
+                const nonce = nacl.randomBytes(24);
+                const messageBytes = nacl.util.decodeUTF8(message);
+                const theirPk = nacl.util.decodeBase64(theirPublicKey);
+                const mySk = nacl.util.decodeBase64(mySecretKey);
+                const box = nacl.box(messageBytes, nonce, theirPk, mySk);
+                return {
+                    cipher: nacl.util.encodeBase64(box),
+                    nonce: nacl.util.encodeBase64(nonce)
+                };
+            },
+            
+            decryptBox(cipherBase64, nonceBase64, theirPublicKey, mySecretKey) {
+                const cipher = nacl.util.decodeBase64(cipherBase64);
+                const nonce = nacl.util.decodeBase64(nonceBase64);
+                const theirPk = nacl.util.decodeBase64(theirPublicKey);
+                const mySk = nacl.util.decodeBase64(mySecretKey);
+                const decrypted = nacl.box.open(cipher, nonce, theirPk, mySk);
+                if (!decrypted) return null;
+                return nacl.util.encodeUTF8(decrypted);
+            }
+        };
+
+        // ============ STEGANOGRAPHY ============
+        const stego = {
+            textToBits(text) {
+                const bytes = new TextEncoder().encode(text);
+                let bits = [];
+                for (const byte of bytes) {
+                    for (let i = 7; i >= 0; i--) {
+                        bits.push((byte >> i) & 1);
+                    }
+                }
+                return bits;
+            },
+            
+            bitsToText(bits) {
+                const bytes = [];
+                for (let i = 0; i < bits.length; i += 8) {
+                    let byte = 0;
+                    for (let j = 0; j < 8; j++) {
+                        byte = (byte << 1) | bits[i + j];
+                    }
+                    bytes.push(byte);
+                }
+                return new TextDecoder().decode(new Uint8Array(bytes));
+            },
+            
+            lengthToBits(length) {
+                const bits = [];
+                for (let i = 31; i >= 0; i--) {
+                    bits.push((length >> i) & 1);
+                }
+                return bits;
+            },
+            
+            bitsToLength(bits) {
+                let length = 0;
+                for (let i = 0; i < 32; i++) {
+                    length = (length << 1) | bits[i];
+                }
+                return length;
+            },
+            
+            encode(imageData, payload) {
+                const json = JSON.stringify(payload);
+                const data = imageData.data;
+                const messageBits = this.textToBits(json);
+                const lengthBits = this.lengthToBits(messageBits.length);
+                const allBits = [...lengthBits, ...messageBits];
+                
+                const maxBits = (data.length / 4) * 3;
+                if (allBits.length > maxBits) {
+                    throw new Error(`Payload too large. Max ~${Math.floor(maxBits / 8)} bytes.`);
+                }
+                
+                let bitIndex = 0;
+                for (let i = 0; i < data.length && bitIndex < allBits.length; i++) {
+                    if ((i + 1) % 4 === 0) continue;
+                    data[i] = (data[i] & 0xFE) | allBits[bitIndex];
+                    bitIndex++;
+                }
+                
+                return imageData;
+            },
+            
+            decode(imageData) {
+                const data = imageData.data;
+                const bits = [];
+                
+                for (let i = 0; i < data.length; i++) {
+                    if ((i + 1) % 4 === 0) continue;
+                    bits.push(data[i] & 1);
+                }
+                
+                const length = this.bitsToLength(bits.slice(0, 32));
+                
+                if (length <= 0 || length > bits.length - 32) {
+                    throw new Error('No hidden data found');
+                }
+                
+                const messageBits = bits.slice(32, 32 + length);
+                const json = this.bitsToText(messageBits);
+                return JSON.parse(json);
+            }
+        };
+
+        // ============ APP STATE ============
+        let state = {
+            me: null,
+            contacts: [],
+            pendingInvites: [], // invites we created, awaiting claim
+            currentContact: null,
+            receivedInvite: null, // temp storage for invite we're processing
+            receivedClaim: null   // temp storage for claim we're processing
+        };
+
+        // ============ INIT ============
+        function init() {
+            state.me = storage.get('me');
+            state.contacts = storage.get('contacts') || [];
+            state.pendingInvites = storage.get('pendingInvites') || [];
+            
+            if (!state.me) {
+                const keyPair = crypto.generateKeyPair();
+                state.me = {
+                    publicKey: keyPair.publicKey,
+                    secretKey: keyPair.secretKey
+                };
+                storage.set('me', state.me);
+            }
+            
+            document.getElementById('my-fingerprint').textContent = crypto.fingerprint(state.me.publicKey);
+            renderContacts();
+        }
+
+        // ============ NAVIGATION ============
+        function showScreen(name) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-' + name).classList.add('active');
+        }
+
+        // ============ CONTACTS ============
+        function renderContacts() {
+            const list = document.getElementById('contact-list');
+            const all = [...state.contacts, ...state.pendingInvites.map(i => ({
+                name: i.name,
+                fingerprint: 'pending...',
+                pending: true
+            }))];
+            
+            if (all.length === 0) {
+                list.innerHTML = `
+                    <li class="empty-state">
+                        <div class="icon">🕊️</div>
+                        <p>No contacts yet.<br>Create an invite to get started.</p>
+                    </li>`;
+                return;
+            }
+            
+            list.innerHTML = all.map((c, i) => `
+                <li class="contact-item ${c.pending ? 'pending' : ''}" onclick="${c.pending ? '' : `selectContact(${i})`}">
+                    <span class="name">${c.name}</span>
+                    <span class="fp">${c.pending ? '⏳ awaiting response' : crypto.fingerprint(c.publicKey)}</span>
+                </li>
+            `).join('');
+        }
+
+        function selectContact(index) {
+            state.currentContact = state.contacts[index];
+            document.getElementById('send-to-name').textContent = state.currentContact.name;
+            document.getElementById('send-to-fingerprint').textContent = crypto.fingerprint(state.currentContact.publicKey);
+            document.getElementById('send-message').value = '';
+            document.getElementById('send-canvas').classList.add('hidden');
+            document.getElementById('generate-send-btn').classList.add('hidden');
+            document.getElementById('send-output').classList.add('hidden');
+            document.getElementById('send-download').classList.add('hidden');
+            showScreen('send-message');
+        }
+
+        // ============ IMAGE HANDLING ============
+        function loadImageToCanvas(event, canvasId) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.getElementById(canvasId);
+                const ctx = canvas.getContext('2d');
+                
+                let w = img.width, h = img.height;
+                const maxW = 800, maxH = 600;
+                if (w > maxW) { h = h * maxW / w; w = maxW; }
+                if (h > maxH) { w = w * maxH / h; h = maxH; }
+                
+                canvas.width = Math.floor(w);
+                canvas.height = Math.floor(h);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.classList.remove('hidden');
+                
+                // Show generate button
+                const btnId = canvasId.replace('-canvas', '') + '-btn';
+                const btn = document.getElementById('generate-' + btnId) || 
+                           document.getElementById('generate-' + canvasId.split('-')[0] + '-btn');
+                if (btn) btn.classList.remove('hidden');
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        async function fetchRandomBird(canvasId) {
+            const btn = event.target;
+            btn.textContent = '⏳ Loading...';
+            btn.disabled = true;
+            
+            try {
+                const subjects = ['pigeon', 'dove', 'bird', 'sparrow'];
+                const subject = subjects[Math.floor(Math.random() * subjects.length)];
+                const timestamp = Date.now();
+                
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const canvas = document.getElementById(canvasId);
+                    const ctx = canvas.getContext('2d');
+                    
+                    let w = img.width, h = img.height;
+                    const maxW = 800, maxH = 600;
+                    if (w > maxW) { h = h * maxW / w; w = maxW; }
+                    if (h > maxH) { w = w * maxH / h; h = maxH; }
+                    
+                    canvas.width = Math.floor(w);
+                    canvas.height = Math.floor(h);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.classList.remove('hidden');
+                    
+                    // Show generate button based on canvas ID
+                    const prefix = canvasId.split('-')[0];
+                    const genBtn = document.getElementById('generate-' + prefix + '-btn');
+                    if (genBtn) genBtn.classList.remove('hidden');
+                    
+                    btn.textContent = '🔄 Get Random Bird Photo';
+                    btn.disabled = false;
+                };
+                
+                img.onerror = () => {
+                    alert('Failed to load image. Try again or choose your own.');
+                    btn.textContent = '🔄 Get Random Bird Photo';
+                    btn.disabled = false;
+                };
+                
+                img.src = `https://source.unsplash.com/800x600/?${subject}&${timestamp}`;
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.textContent = '🔄 Get Random Bird Photo';
+                btn.disabled = false;
+            }
+        }
+
+        // ============ INVITE FLOW ============
+        function generateInvite() {
+            const name = document.getElementById('invite-name').value.trim();
+            const message = document.getElementById('invite-message').value.trim();
+            
+            if (!name) { alert('Please enter a contact name'); return; }
+            if (!message) { alert('Please enter a message'); return; }
+            
+            const canvas = document.getElementById('invite-canvas');
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Generate temp key for this invite
+            const tempKey = crypto.generateSymmetricKey();
+            const encrypted = crypto.encryptSymmetric(message, tempKey);
+            
+            const payload = {
+                t: 'invite',
+                from: state.me.publicKey,
+                temp: tempKey,
+                msg: encrypted.cipher,
+                nonce: encrypted.nonce
+            };
+            
+            try {
+                const encoded = stego.encode(imageData, payload);
+                
+                const output = document.getElementById('invite-output');
+                output.width = canvas.width;
+                output.height = canvas.height;
+                output.getContext('2d').putImageData(encoded, 0, 0);
+                output.classList.remove('hidden');
+                
+                const download = document.getElementById('invite-download');
+                download.href = output.toDataURL('image/png');
+                download.classList.remove('hidden');
+                
+                // Save pending invite
+                state.pendingInvites.push({
+                    name: name,
+                    tempKey: tempKey,
+                    created: Date.now()
+                });
+                storage.set('pendingInvites', state.pendingInvites);
+                renderContacts();
+                
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        // ============ OPEN IMAGE (UNIVERSAL DECODER) ============
+        function handleOpenImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                try {
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const payload = stego.decode(imageData);
+                    
+                    switch (payload.t) {
+                        case 'invite':
+                            handleReceivedInvite(payload);
+                            break;
+                        case 'claim':
+                            handleReceivedClaim(payload);
+                            break;
+                        case 'msg':
+                            handleReceivedMessage(payload);
+                            break;
+                        default:
+                            alert('Unknown payload type');
+                    }
+                } catch (err) {
+                    alert('No hidden message found or corrupted data.');
+                    console.error(err);
+                }
+            };
+            img.src = URL.createObjectURL(file);
+            event.target.value = ''; // Reset input
+        }
+
+        function handleReceivedInvite(payload) {
+            try {
+                const message = crypto.decryptSymmetric(payload.msg, payload.nonce, payload.temp);
+                
+                state.receivedInvite = {
+                    fromPublicKey: payload.from,
+                    tempKey: payload.temp,
+                    message: message
+                };
+                
+                document.getElementById('invite-from-fingerprint').textContent = crypto.fingerprint(payload.from);
+                document.getElementById('invite-preview-message').textContent = `"${message}"`;
+                document.getElementById('accept-name').value = '';
+                document.getElementById('accept-reply').value = '';
+                document.getElementById('accept-canvas').classList.add('hidden');
+                document.getElementById('generate-accept-btn').classList.add('hidden');
+                document.getElementById('accept-output').classList.add('hidden');
+                document.getElementById('accept-download').classList.add('hidden');
+                
+                showScreen('received-invite');
+            } catch (err) {
+                alert('Failed to decrypt invite: ' + err.message);
+            }
+        }
+
+        function generateAccept() {
+            const name = document.getElementById('accept-name').value.trim();
+            const reply = document.getElementById('accept-reply').value.trim();
+            
+            if (!name) { alert('Please enter a name for this contact'); return; }
+            if (!reply) { alert('Please enter a reply message'); return; }
+            
+            const canvas = document.getElementById('accept-canvas');
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Encrypt reply with temp key
+            const encrypted = crypto.encryptSymmetric(reply, state.receivedInvite.tempKey);
+            
+            const payload = {
+                t: 'claim',
+                from: state.me.publicKey,
+                msg: encrypted.cipher,
+                nonce: encrypted.nonce
+            };
+            
+            try {
+                const encoded = stego.encode(imageData, payload);
+                
+                const output = document.getElementById('accept-output');
+                output.width = canvas.width;
+                output.height = canvas.height;
+                output.getContext('2d').putImageData(encoded, 0, 0);
+                output.classList.remove('hidden');
+                
+                const download = document.getElementById('accept-download');
+                download.href = output.toDataURL('image/png');
+                download.classList.remove('hidden');
+                
+                // Save contact
+                state.contacts.push({
+                    name: name,
+                    publicKey: state.receivedInvite.fromPublicKey
+                });
+                storage.set('contacts', state.contacts);
+                renderContacts();
+                
+                state.receivedInvite = null;
+                
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        function handleReceivedClaim(payload) {
+            // Find matching pending invite by trying to decrypt with each temp key
+            let matchedInvite = null;
+            let decryptedMessage = null;
+            
+            for (let i = 0; i < state.pendingInvites.length; i++) {
+                try {
+                    decryptedMessage = crypto.decryptSymmetric(
+                        payload.msg, 
+                        payload.nonce, 
+                        state.pendingInvites[i].tempKey
+                    );
+                    matchedInvite = { index: i, invite: state.pendingInvites[i] };
+                    break;
+                } catch (e) {
+                    // Not this one, try next
+                }
+            }
+            
+            if (!matchedInvite) {
+                alert('Could not match this response to any pending invite.');
+                return;
+            }
+            
+            state.receivedClaim = {
+                fromPublicKey: payload.from,
+                message: decryptedMessage,
+                inviteIndex: matchedInvite.index,
+                inviteName: matchedInvite.invite.name
+            };
+            
+            document.getElementById('claim-from-fingerprint').textContent = crypto.fingerprint(payload.from);
+            document.getElementById('claim-preview-message').textContent = `"${decryptedMessage}"`;
+            
+            showScreen('received-claim');
+        }
+
+        function confirmClaim() {
+            // Save as contact
+            state.contacts.push({
+                name: state.receivedClaim.inviteName,
+                publicKey: state.receivedClaim.fromPublicKey
+            });
+            storage.set('contacts', state.contacts);
+            
+            // Remove from pending
+            state.pendingInvites.splice(state.receivedClaim.inviteIndex, 1);
+            storage.set('pendingInvites', state.pendingInvites);
+            
+            state.receivedClaim = null;
+            renderContacts();
+            showScreen('home');
+        }
+
+        function rejectClaim() {
+            state.receivedClaim = null;
+            showScreen('home');
+        }
+
+        // ============ MESSAGE FLOW ============
+        function generateMessage() {
+            const message = document.getElementById('send-message').value.trim();
+            if (!message) { alert('Please enter a message'); return; }
+            
+            const canvas = document.getElementById('send-canvas');
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            const encrypted = crypto.encryptBox(
+                message,
+                state.currentContact.publicKey,
+                state.me.secretKey
+            );
+            
+            const payload = {
+                t: 'msg',
+                msg: encrypted.cipher,
+                nonce: encrypted.nonce
+            };
+            
+            try {
+                const encoded = stego.encode(imageData, payload);
+                
+                const output = document.getElementById('send-output');
+                output.width = canvas.width;
+                output.height = canvas.height;
+                output.getContext('2d').putImageData(encoded, 0, 0);
+                output.classList.remove('hidden');
+                
+                const download = document.getElementById('send-download');
+                download.href = output.toDataURL('image/png');
+                download.classList.remove('hidden');
+                
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        function handleReceivedMessage(payload) {
+            // Try to decrypt with each contact's public key
+            let sender = null;
+            let decrypted = null;
+            
+            for (const contact of state.contacts) {
+                decrypted = crypto.decryptBox(
+                    payload.msg,
+                    payload.nonce,
+                    contact.publicKey,
+                    state.me.secretKey
+                );
+                if (decrypted) {
+                    sender = contact;
+                    break;
+                }
+            }
+            
+            if (!sender) {
+                alert('Could not decrypt message. Unknown sender or corrupted data.');
+                return;
+            }
+            
+            state.currentContact = sender;
+            document.getElementById('msg-from-name').textContent = sender.name;
+            document.getElementById('msg-from-fingerprint').textContent = crypto.fingerprint(sender.publicKey);
+            document.getElementById('msg-content').textContent = decrypted;
+            
+            showScreen('received-message');
+        }
+
+        function replyToMessage() {
+            document.getElementById('send-to-name').textContent = state.currentContact.name;
+            document.getElementById('send-to-fingerprint').textContent = crypto.fingerprint(state.currentContact.publicKey);
+            document.getElementById('send-message').value = '';
+            document.getElementById('send-canvas').classList.add('hidden');
+            document.getElementById('generate-send-btn').classList.add('hidden');
+            document.getElementById('send-output').classList.add('hidden');
+            document.getElementById('send-download').classList.add('hidden');
+            showScreen('send-message');
+        }
+
+        // ============ START ============
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
