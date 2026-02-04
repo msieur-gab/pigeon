@@ -320,7 +320,7 @@ function renderCreateInvite() {
             <img id="invite-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="invite-actions">
                 <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg', true)">Share</button>
             </div>
         </div>
     `;
@@ -350,7 +350,7 @@ function renderSendMessage() {
             <img id="send-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="send-actions">
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg', true)">Share</button>
             </div>
         </div>
     `;
@@ -394,7 +394,7 @@ function renderReceivedInvite() {
             <img id="accept-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="accept-actions">
                 <a id="accept-download" class="btn" download="pigeon-accept.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg')">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg', true)">Share</button>
             </div>
         </div>
     `;
@@ -848,14 +848,16 @@ function replyTo(publicKey) {
     selectContact(publicKey);
 }
 
-async function shareImage(filename) {
+async function shareImage(filename, asFile = false) {
     if (!state.generatedBlob) {
         alert('No image to share');
         return;
     }
 
+    // Use generic MIME type when sharing as file to prevent re-encoding
+    const mimeType = asFile ? 'application/octet-stream' : 'image/jpeg';
     const file = new File([state.generatedBlob], filename || state.generatedFilename, {
-        type: 'image/jpeg'
+        type: mimeType
     });
 
     // Check if Web Share API with files is supported
