@@ -11,7 +11,7 @@ const state = {
     currentContact: null,
     receivedPayload: null,
     receivedImageData: null,  // For extracting avatar thumbnail from carrier
-    generatedBlob: null,      // For sharing generated images
+    generatedJpegData: null,  // Raw JPEG bytes for sharing (Uint8Array)
     generatedFilename: null   // Filename for sharing
 };
 
@@ -713,8 +713,8 @@ async function generateInvite() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
-        // Store blob for sharing
-        state.generatedBlob = result.blob;
+        // Store raw bytes for sharing (created fresh in share handler)
+        state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-invite.jpg';
 
         const output = document.getElementById('invite-output');
@@ -744,8 +744,8 @@ async function generateMessage() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
-        // Store blob for sharing
-        state.generatedBlob = result.blob;
+        // Store raw bytes for sharing (created fresh in share handler)
+        state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-message.jpg';
 
         const output = document.getElementById('send-output');
@@ -789,8 +789,8 @@ async function generateAccept() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
-        // Store blob for sharing
-        state.generatedBlob = result.blob;
+        // Store raw bytes for sharing (created fresh in share handler)
+        state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-accept.jpg';
 
         const output = document.getElementById('accept-output');
@@ -849,14 +849,16 @@ function replyTo(publicKey) {
 }
 
 async function shareImage(filename, asFile = false) {
-    if (!state.generatedBlob) {
+    if (!state.generatedJpegData) {
         alert('No image to share');
         return;
     }
 
-    // Use generic MIME type when sharing as file to prevent re-encoding
+    // Create Blob and File fresh within user gesture context
+    // This avoids permission issues on some Android browsers
     const mimeType = asFile ? 'application/octet-stream' : 'image/jpeg';
-    const file = new File([state.generatedBlob], filename || state.generatedFilename, {
+    const blob = new Blob([state.generatedJpegData], { type: mimeType });
+    const file = new File([blob], filename || state.generatedFilename, {
         type: mimeType
     });
 
