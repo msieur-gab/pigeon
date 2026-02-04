@@ -2,7 +2,7 @@
 // Uses f5stegojs library for DCT coefficient embedding
 
 // Default steganographic key (can be customized per-app)
-const DEFAULT_KEY = [115, 112, 111, 114, 101, 45, 107, 101, 121]; // "spore-key" as bytes
+const DEFAULT_KEY = [112, 105, 103, 101, 111, 110, 45, 107, 101, 121]; // "pigeon-key" as bytes
 
 /**
  * Encode payload into JPEG using F5 algorithm
