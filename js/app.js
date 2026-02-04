@@ -320,7 +320,7 @@ function renderCreateInvite() {
             <img id="invite-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="invite-actions">
                 <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg', true)">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
             </div>
         </div>
     `;
@@ -350,7 +350,7 @@ function renderSendMessage() {
             <img id="send-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="send-actions">
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg', true)">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
             </div>
         </div>
     `;
@@ -394,7 +394,7 @@ function renderReceivedInvite() {
             <img id="accept-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="accept-actions">
                 <a id="accept-download" class="btn" download="pigeon-accept.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg', true)">Share</button>
+                <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg')">Share</button>
             </div>
         </div>
     `;
@@ -848,37 +848,42 @@ function replyTo(publicKey) {
     selectContact(publicKey);
 }
 
-async function shareImage(filename, asFile = false) {
+async function shareImage(filename) {
     if (!state.generatedJpegData) {
         alert('No image to share');
         return;
     }
 
     // Create Blob and File fresh within user gesture context
-    // This avoids permission issues on some Android browsers
-    const mimeType = asFile ? 'application/octet-stream' : 'image/jpeg';
-    const blob = new Blob([state.generatedJpegData], { type: mimeType });
+    const blob = new Blob([state.generatedJpegData], { type: 'image/jpeg' });
     const file = new File([blob], filename || state.generatedFilename, {
-        type: mimeType
+        type: 'image/jpeg',
+        lastModified: Date.now()
     });
 
     // Check if Web Share API with files is supported
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-            await navigator.share({
-                files: [file],
-                title: 'Pigeon'
-            });
-        } catch (err) {
-            // User cancelled or share failed
-            if (err.name !== 'AbortError') {
-                console.error('Share failed:', err);
-                alert('Share failed: ' + err.message);
-            }
+    if (!navigator.canShare) {
+        alert('Sharing not supported. Please save the image and share from your gallery.');
+        return;
+    }
+
+    if (!navigator.canShare({ files: [file] })) {
+        alert('File sharing not supported on this browser. Please save the image and share from your gallery.');
+        return;
+    }
+
+    try {
+        await navigator.share({
+            files: [file]
+        });
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            // User cancelled - do nothing
+            return;
         }
-    } else {
-        // Fallback: try to share URL or alert
-        alert('Sharing files is not supported on this device. Please use Save instead.');
+        console.error('Share failed:', err.name, err.message);
+        // Provide helpful guidance
+        alert('Share failed due to browser restrictions.\n\nWorkaround: Save the image first, then share it from your gallery or file manager.');
     }
 }
 
