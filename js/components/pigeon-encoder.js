@@ -2,26 +2,31 @@ import { LitElement, html, css } from 'https://esm.sh/lit@3';
 
 /**
  * Encoder component for the carrier → encode → share flow.
+ * Follows Lit reactive patterns: props down, events up.
  *
  * Usage:
  *   <pigeon-encoder
  *     button-label="Choose carrier image"
  *     generate-label="Generate invite image"
  *     filename="pigeon-invite.jpg"
+ *     .result=${this.inviteResult}
  *     @generate=${this._handleGenerate}>
  *     <!-- Optional form fields in default slot -->
  *   </pigeon-encoder>
  *
- * After encoding, call: encoder.setResult(dataURL, jpegData)
+ * Props:
+ *   - result: { dataURL: string, jpegData: Uint8Array } | null
+ *
+ * Events:
+ *   - generate: { detail: { imageData: ImageData } }
  */
 class PigeonEncoder extends LitElement {
   static properties = {
     buttonLabel: { type: String, attribute: 'button-label' },
     generateLabel: { type: String, attribute: 'generate-label' },
     filename: { type: String },
-    _hasImage: { type: Boolean, state: true },
-    _resultUrl: { type: String, state: true },
-    _jpegData: { type: Object, state: true }
+    result: { type: Object },  // { dataURL, jpegData } from parent
+    _hasImage: { type: Boolean, state: true }
   };
 
   static styles = css`
@@ -88,9 +93,8 @@ class PigeonEncoder extends LitElement {
     this.buttonLabel = 'Choose carrier image';
     this.generateLabel = 'Generate image';
     this.filename = 'pigeon-image.jpg';
+    this.result = null;
     this._hasImage = false;
-    this._resultUrl = null;
-    this._jpegData = null;
   }
 
   get canvas() {
@@ -101,17 +105,6 @@ class PigeonEncoder extends LitElement {
     const canvas = this.canvas;
     const ctx = canvas.getContext('2d');
     return ctx.getImageData(0, 0, canvas.width, canvas.height);
-  }
-
-  setResult(dataURL, jpegData) {
-    this._resultUrl = dataURL;
-    this._jpegData = jpegData;
-  }
-
-  reset() {
-    this._hasImage = false;
-    this._resultUrl = null;
-    this._jpegData = null;
   }
 
   _handleFileClick() {
@@ -153,12 +146,11 @@ class PigeonEncoder extends LitElement {
   }
 
   async _handleShare() {
-    if (!this._jpegData) {
-      alert('No image to share');
+    if (!this.result?.jpegData) {
       return;
     }
 
-    const blob = new Blob([this._jpegData], { type: 'image/jpeg' });
+    const blob = new Blob([this.result.jpegData], { type: 'image/jpeg' });
     const file = new File([blob], this.filename, {
       type: 'image/jpeg',
       lastModified: Date.now()
@@ -184,6 +176,8 @@ class PigeonEncoder extends LitElement {
   }
 
   render() {
+    const hasResult = this.result?.dataURL;
+
     return html`
       <slot></slot>
 
@@ -195,15 +189,15 @@ class PigeonEncoder extends LitElement {
       <canvas class="${this._hasImage ? '' : 'hidden'}"></canvas>
 
       <button
-        class="btn btn-block ${this._hasImage && !this._resultUrl ? '' : 'hidden'}"
+        class="btn btn-block ${this._hasImage && !hasResult ? '' : 'hidden'}"
         @click=${this._handleGenerate}>
         ${this.generateLabel}
       </button>
 
-      ${this._resultUrl ? html`
-        <img class="output-image" src=${this._resultUrl} alt="Encoded image">
+      ${hasResult ? html`
+        <img class="output-image" src=${this.result.dataURL} alt="Encoded image">
         <div class="actions">
-          <a class="btn" href=${this._resultUrl} download=${this.filename}>Save</a>
+          <a class="btn" href=${this.result.dataURL} download=${this.filename}>Save</a>
           <button class="btn" @click=${this._handleShare}>Share</button>
         </div>
       ` : null}

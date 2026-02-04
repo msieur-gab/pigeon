@@ -12,7 +12,12 @@ class PigeonApp extends LitElement {
     screen: { type: String },
     currentContact: { type: Object },
     receivedPayload: { type: Object },
-    receivedImageData: { type: Object }
+    receivedImageData: { type: Object },
+    // Encoder results (props down to child components)
+    inviteResult: { type: Object },
+    sendResult: { type: Object },
+    acceptResult: { type: Object },
+    backupResult: { type: Object }
   };
 
   static styles = css`
@@ -250,8 +255,11 @@ class PigeonApp extends LitElement {
     this.currentContact = null;
     this.receivedPayload = null;
     this.receivedImageData = null;
-    this._generatedJpegData = null;
-    this._generatedFilename = null;
+    // Encoder results
+    this.inviteResult = null;
+    this.sendResult = null;
+    this.acceptResult = null;
+    this.backupResult = null;
   }
 
   connectedCallback() {
@@ -283,6 +291,12 @@ class PigeonApp extends LitElement {
   }
 
   _navigate(screen, data = {}) {
+    // Clear encoder results when navigating
+    this.inviteResult = null;
+    this.sendResult = null;
+    this.acceptResult = null;
+    this.backupResult = null;
+
     this.screen = screen;
     if (data.contact) this.currentContact = data.contact;
     if (data.payload) this.receivedPayload = data.payload;
@@ -407,7 +421,6 @@ class PigeonApp extends LitElement {
     if (!name) { alert('Please enter a contact name'); return; }
     if (!message) { alert('Please enter a message'); return; }
 
-    const encoder = this.renderRoot.querySelector('#invite-encoder');
     const imageData = e.detail.imageData;
 
     try {
@@ -416,7 +429,7 @@ class PigeonApp extends LitElement {
       sync.scheduleSync();
 
       const result = await stego.encodeRobust(imageData, payload);
-      encoder.setResult(result.dataURL, result.jpegData);
+      this.inviteResult = { dataURL: result.dataURL, jpegData: result.jpegData };
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -428,13 +441,12 @@ class PigeonApp extends LitElement {
 
     if (!message) { alert('Please enter a message'); return; }
 
-    const encoder = this.renderRoot.querySelector('#send-encoder');
     const imageData = e.detail.imageData;
 
     try {
       const payload = messages.createMessage(message, this.currentContact.publicKey);
       const result = await stego.encodeRobust(imageData, payload);
-      encoder.setResult(result.dataURL, result.jpegData);
+      this.sendResult = { dataURL: result.dataURL, jpegData: result.jpegData };
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -449,7 +461,6 @@ class PigeonApp extends LitElement {
     if (!name) { alert('Please enter a name'); return; }
     if (!reply) { alert('Please enter a reply'); return; }
 
-    const encoder = this.renderRoot.querySelector('#accept-encoder');
     const imageData = e.detail.imageData;
 
     try {
@@ -464,19 +475,18 @@ class PigeonApp extends LitElement {
       sync.scheduleSync();
 
       const result = await stego.encodeRobust(imageData, payload);
-      encoder.setResult(result.dataURL, result.jpegData);
+      this.acceptResult = { dataURL: result.dataURL, jpegData: result.jpegData };
     } catch (err) {
       alert('Error: ' + err.message);
     }
   }
 
   async _handleGenerateBackup(e) {
-    const encoder = this.renderRoot.querySelector('#backup-encoder');
     const imageData = e.detail.imageData;
 
     try {
       const result = await identity.backupToImage(imageData);
-      encoder.setResult(result.dataURL, result.jpegData);
+      this.backupResult = { dataURL: result.dataURL, jpegData: result.jpegData };
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -747,6 +757,7 @@ class PigeonApp extends LitElement {
           button-label="Choose carrier image"
           generate-label="Generate invite image"
           filename="pigeon-invite.jpg"
+          .result=${this.inviteResult}
           @generate=${this._handleGenerateInvite}>
           <div class="field">
             <label>contact name (for you)</label>
@@ -779,6 +790,7 @@ class PigeonApp extends LitElement {
           button-label="Choose carrier image"
           generate-label="Generate message image"
           filename="pigeon-message.jpg"
+          .result=${this.sendResult}
           @generate=${this._handleGenerateMessage}>
           <div class="field">
             <label>message</label>
@@ -815,6 +827,7 @@ class PigeonApp extends LitElement {
           button-label="Choose carrier image"
           generate-label="Accept & generate reply"
           filename="pigeon-accept.jpg"
+          .result=${this.acceptResult}
           @generate=${this._handleGenerateAccept}>
           <div class="field">
             <label>save contact as</label>
@@ -898,6 +911,7 @@ class PigeonApp extends LitElement {
           button-label="Choose image"
           generate-label="Generate soul bird"
           filename="soul-bird.jpg"
+          .result=${this.backupResult}
           @generate=${this._handleGenerateBackup}>
         </pigeon-encoder>
       </div>
