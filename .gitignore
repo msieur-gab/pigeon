@@ -19,3 +19,16 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Server data (sync API storage)
+data/
+
+# Environment
+.env
+.env.*
+
+# Node (if ever used)
+node_modules/
+
+# Logs
+*.log
