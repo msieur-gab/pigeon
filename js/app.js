@@ -10,7 +10,9 @@ const state = {
     screen: 'loading',
     currentContact: null,
     receivedPayload: null,
-    receivedImageData: null  // For extracting avatar thumbnail from carrier
+    receivedImageData: null,  // For extracting avatar thumbnail from carrier
+    generatedBlob: null,      // For sharing generated images
+    generatedFilename: null   // Filename for sharing
 };
 
 // Initialize app
@@ -316,7 +318,10 @@ function renderCreateInvite() {
             <canvas id="invite-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-invite-btn" onclick="window.app.generateInvite()">Generate invite image</button>
             <img id="invite-output" class="hidden output-image" alt="Encoded image">
-            <a id="invite-download" class="btn btn-block hidden" download="pigeon-invite.jpg">Save image</a>
+            <div class="actions hidden" id="invite-actions">
+                <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
+                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
+            </div>
         </div>
     `;
 }
@@ -343,7 +348,10 @@ function renderSendMessage() {
             <canvas id="send-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
             <img id="send-output" class="hidden output-image" alt="Encoded image">
-            <a id="send-download" class="btn btn-block hidden" download="pigeon-message.jpg">Save image</a>
+            <div class="actions hidden" id="send-actions">
+                <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
+                <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
+            </div>
         </div>
     `;
 }
@@ -384,7 +392,10 @@ function renderReceivedInvite() {
             <canvas id="accept-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-accept-btn" onclick="window.app.generateAccept()">Accept & generate reply</button>
             <img id="accept-output" class="hidden output-image" alt="Encoded image">
-            <a id="accept-download" class="btn btn-block hidden" download="pigeon-accept.jpg">Save reply image</a>
+            <div class="actions hidden" id="accept-actions">
+                <a id="accept-download" class="btn" download="pigeon-accept.jpg">Save</a>
+                <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg')">Share</button>
+            </div>
         </div>
     `;
 }
@@ -484,7 +495,8 @@ function setupEventListeners() {
         replyTo,
         saveName,
         saveServer,
-        syncNow
+        syncNow,
+        shareImage
     };
 }
 
@@ -701,13 +713,17 @@ async function generateInvite() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
+        // Store blob for sharing
+        state.generatedBlob = result.blob;
+        state.generatedFilename = 'pigeon-invite.jpg';
+
         const output = document.getElementById('invite-output');
         output.src = result.dataURL;
         output.classList.remove('hidden');
 
         const download = document.getElementById('invite-download');
         download.href = result.dataURL;
-        download.classList.remove('hidden');
+        document.getElementById('invite-actions').classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }
@@ -728,13 +744,17 @@ async function generateMessage() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
+        // Store blob for sharing
+        state.generatedBlob = result.blob;
+        state.generatedFilename = 'pigeon-message.jpg';
+
         const output = document.getElementById('send-output');
         output.src = result.dataURL;
         output.classList.remove('hidden');
 
         const download = document.getElementById('send-download');
         download.href = result.dataURL;
-        download.classList.remove('hidden');
+        document.getElementById('send-actions').classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }
@@ -769,13 +789,17 @@ async function generateAccept() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
 
+        // Store blob for sharing
+        state.generatedBlob = result.blob;
+        state.generatedFilename = 'pigeon-accept.jpg';
+
         const output = document.getElementById('accept-output');
         output.src = result.dataURL;
         output.classList.remove('hidden');
 
         const download = document.getElementById('accept-download');
         download.href = result.dataURL;
-        download.classList.remove('hidden');
+        document.getElementById('accept-actions').classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }
@@ -822,6 +846,36 @@ function rejectClaim() {
 
 function replyTo(publicKey) {
     selectContact(publicKey);
+}
+
+async function shareImage(filename) {
+    if (!state.generatedBlob) {
+        alert('No image to share');
+        return;
+    }
+
+    const file = new File([state.generatedBlob], filename || state.generatedFilename, {
+        type: 'image/jpeg'
+    });
+
+    // Check if Web Share API with files is supported
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                files: [file],
+                title: 'Pigeon'
+            });
+        } catch (err) {
+            // User cancelled or share failed
+            if (err.name !== 'AbortError') {
+                console.error('Share failed:', err);
+                alert('Share failed: ' + err.message);
+            }
+        }
+    } else {
+        // Fallback: try to share URL or alert
+        alert('Sharing files is not supported on this device. Please use Save instead.');
+    }
 }
 
 function saveName() {
