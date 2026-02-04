@@ -1,0 +1,33 @@
+{
+  "name": "Pigeon",
+  "short_name": "Pigeon",
+  "description": "Encrypted messages hidden in bird photos",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "docs/pigeon_logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "image",
+          "accept": ["image/jpeg", "image/png", "image/webp", "image/*"]
+        }
+      ]
+    }
+  },
+  "categories": ["utilities", "security"],
+  "lang": "en"
+}
