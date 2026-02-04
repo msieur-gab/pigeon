@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pigeon-encoder demo</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .demo-container {
+            max-width: 32rem;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .demo-section {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .demo-section h2 {
+            font-size: 1rem;
+            font-weight: normal;
+            margin-bottom: 0.5rem;
+        }
+        .log {
+            background: var(--fg);
+            color: var(--bg);
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+        .log-entry {
+            margin-bottom: 0.25rem;
+            opacity: 0.8;
+        }
+        .log-entry:last-child {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem;">
+            <h1 style="font-size: 1rem; font-weight: normal;">pigeon-encoder demo (reactive)</h1>
+            <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; font-size: 1rem;">●</button>
+        </header>
+
+        <!-- Demo 1: Basic usage with form fields -->
+        <div class="demo-section">
+            <h2>1. With form fields (like invite screen)</h2>
+            <pigeon-encoder
+                id="encoder1"
+                button-label="Choose carrier image"
+                generate-label="Generate test image"
+                filename="demo-output.jpg">
+                <div class="field">
+                    <label>Contact name</label>
+                    <input type="text" id="demo-name" placeholder="Alice">
+                </div>
+                <div class="field">
+                    <label>Message</label>
+                    <textarea id="demo-message" placeholder="Hello world..."></textarea>
+                </div>
+            </pigeon-encoder>
+        </div>
+
+        <!-- Demo 2: Minimal usage (like backup screen) -->
+        <div class="demo-section">
+            <h2>2. Minimal (no form fields)</h2>
+            <pigeon-encoder
+                id="encoder2"
+                button-label="Choose image"
+                generate-label="Process image"
+                filename="processed.jpg">
+            </pigeon-encoder>
+        </div>
+
+        <!-- Demo 3: With reset capability -->
+        <div class="demo-section">
+            <h2>3. With external state control</h2>
+            <pigeon-encoder
+                id="encoder3"
+                button-label="Select photo"
+                generate-label="Encode message"
+                filename="secret.jpg">
+            </pigeon-encoder>
+            <button class="btn" onclick="clearEncoder3()" style="margin-top: 0.5rem;">Clear result (set result=null)</button>
+        </div>
+
+        <!-- Event log -->
+        <div class="demo-section">
+            <h2>Event log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import './js/components/pigeon-encoder.js';
+
+        const log = document.getElementById('log');
+
+        // Store results reactively (simulating parent state)
+        const results = {
+            encoder1: null,
+            encoder2: null,
+            encoder3: null
+        };
+
+        function addLog(msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Simulate encoding - in real app this calls stego.encodeRobust()
+        async function simulateEncode(imageData) {
+            addLog(`Encoding ${imageData.width}x${imageData.height} image...`);
+
+            // Create a canvas to get the image back as dataURL
+            const canvas = document.createElement('canvas');
+            canvas.width = imageData.width;
+            canvas.height = imageData.height;
+            const ctx = canvas.getContext('2d');
+            ctx.putImageData(imageData, 0, 0);
+
+            // Add a visible watermark to show "encoding" happened
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, imageData.height - 40, 200, 30);
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px monospace';
+            ctx.fillText('ENCODED BY PIGEON', 20, imageData.height - 20);
+
+            // Simulate async encoding delay
+            await new Promise(r => setTimeout(r, 500));
+
+            const dataURL = canvas.toDataURL('image/jpeg', 0.9);
+
+            // Convert to Uint8Array for share functionality
+            const binary = atob(dataURL.split(',')[1]);
+            const array = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                array[i] = binary.charCodeAt(i);
+            }
+
+            addLog(`Encoded! Output size: ${Math.round(array.length / 1024)}KB`);
+            return { dataURL, jpegData: array };
+        }
+
+        // Handle generate events - parent updates state, passes down via .result
+        document.querySelectorAll('pigeon-encoder').forEach((encoder) => {
+            encoder.addEventListener('generate', async (e) => {
+                const id = encoder.id;
+                addLog(`[${id}] Generate event received`);
+
+                // Get any form values if present
+                if (id === 'encoder1') {
+                    const name = document.getElementById('demo-name').value;
+                    const msg = document.getElementById('demo-message').value;
+                    addLog(`[${id}] Form data: name="${name}", message="${msg}"`);
+                }
+
+                try {
+                    // Simulate encoding
+                    const result = await simulateEncode(e.detail.imageData);
+
+                    // Parent sets state, passes down via property (reactive pattern)
+                    results[id] = result;
+                    encoder.result = result;
+
+                    addLog(`[${id}] Result set via .result property (reactive)`);
+                } catch (err) {
+                    addLog(`[${id}] Error: ${err.message}`);
+                }
+            });
+        });
+
+        // Clear encoder3 by setting result to null (reactive pattern)
+        window.clearEncoder3 = () => {
+            results.encoder3 = null;
+            document.getElementById('encoder3').result = null;
+            addLog('[encoder3] result set to null (cleared)');
+        };
+
+        // Theme toggle
+        window.toggleTheme = () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+        };
+
+        addLog('Demo loaded (reactive pattern: props down, events up)');
+        addLog('Parent owns state, passes .result to encoder');
+    </script>
+</body>
+</html>
