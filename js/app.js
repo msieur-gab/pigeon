@@ -4,6 +4,7 @@ import * as messages from './services/messages.js';
 import * as sync from './services/sync.js';
 import * as stego from './utils/stego.js';
 import * as crypto from './utils/crypto.js';
+import { diagnose } from './utils/diagnose.js';
 
 // App state
 const state = {
@@ -12,8 +13,29 @@ const state = {
     receivedPayload: null,
     receivedImageData: null,  // For extracting avatar thumbnail from carrier
     generatedJpegData: null,  // Raw JPEG bytes for sharing (Uint8Array)
-    generatedFilename: null   // Filename for sharing
+    generatedFilename: null,  // Filename for sharing
+    openStatus: null,         // HTML shown on home after an open attempt
+    pendingFile: null         // Image received before an identity existed
 };
+
+// Screens where a dropped/pasted image becomes the carrier
+const CARRIER_SCREENS = {
+    'create-invite': { canvas: 'invite-canvas', btn: 'generate-invite-btn' },
+    'send-message': { canvas: 'send-canvas', btn: 'generate-send-btn' },
+    'received-invite': { canvas: 'accept-canvas', btn: 'generate-accept-btn' },
+    'backup': { canvas: 'backup-canvas', btn: 'generate-backup-btn' }
+};
+
+// Escape text that came from other people (names, messages) before it
+// goes into innerHTML
+function esc(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 // Initialize app
 export function init() {
@@ -36,13 +58,25 @@ export function init() {
     
     // Setup event listeners
     setupEventListeners();
+
+    registerServiceWorker();
+    receiveSharedImage();
+    receiveLaunchedFile();
 }
 
 // Navigation
 export function navigate(screen, data = {}) {
     state.screen = screen;
+    state.openStatus = null;
     Object.assign(state, data);
     render();
+
+    // An image arrived (share sheet / file open) before setup finished
+    if (screen === 'home' && state.pendingFile) {
+        const file = state.pendingFile;
+        state.pendingFile = null;
+        openImageFile(file);
+    }
 }
 
 // Render current screen
@@ -104,7 +138,7 @@ function renderHeader(title = 'pigeon', showBack = false) {
     
     return `
         <header>
-            <h1>${showBack ? `<a href="#" class="back" onclick="window.app.navigate('home'); return false;">←</a> ` : ''}${title}</h1>
+            <h1>${showBack ? `<a href="#" class="back" onclick="window.app.navigate('home'); return false;">←</a> ` : ''}${esc(title)}</h1>
             <button class="theme-toggle" onclick="window.app.toggleTheme()">${icon}</button>
         </header>
     `;
@@ -113,6 +147,7 @@ function renderHeader(title = 'pigeon', showBack = false) {
 function renderWelcome() {
     return `
         ${renderHeader('pigeon')}
+        ${state.pendingFile ? `<div class="status info">An image is waiting. Create or restore your identity first, then it opens automatically.</div>` : ''}
         <div class="card">
             <p class="mb-1">Encrypted messages hidden in bird photos.</p>
             <button class="btn btn-block mb-1" onclick="window.app.navigate('setup')">Create identity</button>
@@ -145,7 +180,7 @@ function renderSetupWords() {
         ${renderHeader('your identity')}
         <div class="card">
             <p class="text-muted text-small mb-1">your name</p>
-            <p class="mb-1">${name || '(unnamed)'}</p>
+            <p class="mb-1">${esc(name) || '(unnamed)'}</p>
             <p class="text-muted text-small mb-1">your fingerprint</p>
             <div class="fingerprint">${fp}</div>
         </div>
@@ -208,13 +243,13 @@ function renderHome() {
                 ? `<img src="${c.avatar}" class="avatar-small" alt="">` 
                 : `<div class="avatar-small avatar-placeholder">?</div>`;
             const displayLine = c.displayName 
-                ? `<span class="display-name">${c.displayName}</span>` 
+                ? `<span class="display-name">${esc(c.displayName)}</span>` 
                 : '';
             contactsHtml += `
                 <li class="contact-item" onclick="window.app.selectContact('${c.publicKey}')">
                     ${contactAvatar}
                     <div class="contact-info">
-                        <span class="name">${c.name}</span>
+                        <span class="name">${esc(c.name)}</span>
                         ${displayLine}
                     </div>
                     <span class="fp">${c.fingerprint}</span>
@@ -225,7 +260,7 @@ function renderHome() {
             contactsHtml += `
                 <li class="contact-item pending">
                     <div class="avatar-small avatar-placeholder">?</div>
-                    <span class="name">${p.name}</span>
+                    <span class="name">${esc(p.name)}</span>
                     <span class="fp">awaiting</span>
                 </li>
             `;
@@ -239,7 +274,7 @@ function renderHome() {
             <div class="identity-row">
                 ${avatarHtml}
                 <div class="identity-info">
-                    <p class="text-muted text-small">${name || 'unnamed'}</p>
+                    <p class="text-muted text-small">${esc(name) || 'unnamed'}</p>
                     <div class="fingerprint">${fp}</div>
                 </div>
                 <button class="btn btn-ghost" onclick="window.app.navigate('settings')">⚙</button>
@@ -250,6 +285,8 @@ function renderHome() {
             <button class="btn" onclick="document.getElementById('open-image-input').click()">↓ open</button>
             <input type="file" id="open-image-input" accept="image/*">
         </div>
+        ${state.openStatus || ''}
+        <p class="text-muted text-small mb-1 drop-hint">Open a pigeon image: tap ↓ open, share it to Pigeon, or drop / paste it here.</p>
         <div class="card">
             <h2>contacts</h2>
             ${contactsHtml}
@@ -278,7 +315,7 @@ function renderSettings() {
             </div>
             <div class="field">
                 <label>your display name</label>
-                <input type="text" id="settings-name" value="${name}" placeholder="black_dove">
+                <input type="text" id="settings-name" value="${esc(name)}" placeholder="black_dove">
             </div>
             <button class="btn btn-block" onclick="window.app.saveName()">Save name</button>
         </div>
@@ -287,7 +324,7 @@ function renderSettings() {
             <p class="text-small text-muted mb-1">Status: ${syncStatus}</p>
             <div class="field">
                 <label>server URL</label>
-                <input type="text" id="settings-server" value="${server}" placeholder="https://example.com">
+                <input type="text" id="settings-server" value="${esc(server)}" placeholder="https://example.com">
             </div>
             <div class="actions">
                 <button class="btn" onclick="window.app.saveServer()">Save</button>
@@ -322,6 +359,7 @@ function renderCreateInvite() {
                 <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
             </div>
+            ${renderSendTip()}
         </div>
     `;
 }
@@ -331,8 +369,8 @@ function renderSendMessage() {
     if (!contact) return renderHome();
 
     const displayInfo = contact.displayName
-        ? `${contact.name} (${contact.displayName})`
-        : contact.name;
+        ? `${esc(contact.name)} (${esc(contact.displayName)})`
+        : esc(contact.name);
 
     return `
         ${renderHeader('send to ' + contact.name, true)}
@@ -352,6 +390,7 @@ function renderSendMessage() {
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
             </div>
+            ${renderSendTip()}
         </div>
     `;
 }
@@ -374,14 +413,14 @@ function renderReceivedInvite() {
             <div class="sender-info">
                 ${avatarHtml}
                 <div>
-                    <p class="mb-1">${p.fromName || 'unnamed'}</p>
+                    <p class="mb-1">${esc(p.fromName) || 'unnamed'}</p>
                     <div class="fingerprint">${p.fromFingerprint}</div>
                 </div>
             </div>
-            <div class="message-preview message-text">"${p.message}"</div>
+            <div class="message-preview message-text">"${esc(p.message)}"</div>
             <div class="field">
                 <label>save contact as</label>
-                <input type="text" id="accept-name" value="${p.fromName || ''}" placeholder="Bob">
+                <input type="text" id="accept-name" value="${esc(p.fromName)}" placeholder="Bob">
             </div>
             <div class="field">
                 <label>reply message</label>
@@ -396,6 +435,7 @@ function renderReceivedInvite() {
                 <a id="accept-download" class="btn" download="pigeon-accept.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg')">Share</button>
             </div>
+            ${renderSendTip()}
         </div>
     `;
 }
@@ -418,12 +458,12 @@ function renderReceivedClaim() {
             <div class="sender-info">
                 ${avatarHtml}
                 <div>
-                    <p>${p.pendingInvite.name} has responded!</p>
-                    <p class="text-muted text-small">${p.fromName || '(unnamed)'}</p>
+                    <p>${esc(p.pendingInvite.name)} has responded!</p>
+                    <p class="text-muted text-small">${esc(p.fromName) || '(unnamed)'}</p>
                     <div class="fingerprint">${p.fromFingerprint}</div>
                 </div>
             </div>
-            <div class="message-preview message-text">"${p.message}"</div>
+            <div class="message-preview message-text">"${esc(p.message)}"</div>
             <div class="status info">Verify this fingerprint matches what they see on their device.</div>
             <div class="actions">
                 <button class="btn" onclick="window.app.confirmClaim()">Confirm</button>
@@ -437,17 +477,33 @@ function renderReceivedMessage() {
     const p = state.receivedPayload;
     if (!p) return renderHome();
     
-    const fromInfo = p.from.displayName 
-        ? `${p.from.name} (${p.from.displayName})` 
-        : p.from.name;
+    const fromInfo = p.from.displayName
+        ? `${esc(p.from.name)} (${esc(p.from.displayName)})`
+        : esc(p.from.name);
     
     return `
         ${renderHeader('message from ' + p.from.name, true)}
         <div class="card">
             <p class="text-muted text-small">${fromInfo}</p>
             <div class="fingerprint mb-1">${p.from.fingerprint}</div>
-            <div class="message-preview message-text">"${p.message}"</div>
+            <div class="message-preview message-text">"${esc(p.message)}"</div>
             <button class="btn btn-block mt-1" onclick="window.app.replyTo('${p.from.publicKey}')">Reply</button>
+        </div>
+    `;
+}
+
+// Hidden messages only survive if the image travels untouched.
+// Hidden until the actions row above it is shown (sibling rule in CSS).
+function renderSendTip() {
+    return `
+        <div class="status info send-tip">
+            <p class="mb-1"><strong>Send it as a file, not a photo.</strong> Apps compress photos, which erases the message.</p>
+            <ul class="tip-list">
+                <li>Telegram: 📎 → File</li>
+                <li>WhatsApp: 📎 → Document</li>
+                <li>Signal: 📎 → File</li>
+                <li>Email: attach the image</li>
+            </ul>
         </div>
     `;
 }
@@ -472,6 +528,9 @@ function renderBackup() {
             <button class="btn btn-block hidden" id="generate-backup-btn" onclick="window.app.generateBackup()">Generate soul bird</button>
             <img id="backup-output" class="hidden output-image" alt="Soul bird">
             <a id="backup-download" class="btn btn-block hidden" download="soul-bird.jpg">Save soul bird</a>
+            <div class="status info hidden" id="backup-tip">
+                Keep it as an untouched file. Editing, cropping, screenshots or sending it as a photo erase the identity inside.
+            </div>
         </div>
     `;
 }
@@ -498,6 +557,7 @@ function setupEventListeners() {
         syncNow,
         shareImage
     };
+    setupDropAndPaste();
 }
 
 function attachScreenListeners() {
@@ -581,9 +641,15 @@ async function handleRestoreImage(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    let payload;
     try {
-        // Decode payload (F5 first, LSB fallback)
-        const payload = await stego.decodeFile(file);
+        payload = await stego.decodeFile(file);
+    } catch {
+        document.getElementById('restore-status').innerHTML = await explainNoMessage(file);
+        return;
+    }
+
+    try {
         identity.restoreFromPayload(payload);
 
         // Use the soul bird image as avatar
@@ -594,7 +660,7 @@ async function handleRestoreImage(e) {
         navigate('home');
     } catch (err) {
         document.getElementById('restore-status').innerHTML =
-            `<div class="status error">${err.message}</div>`;
+            `<div class="status error">${esc(err.message)}</div>`;
     }
 }
 
@@ -617,7 +683,10 @@ async function handleAvatarChange(e) {
 function loadImageToCanvas(e, canvasId, btnId) {
     const file = e.target.files[0];
     if (!file) return;
-    
+    loadFileToCanvas(file, canvasId, btnId);
+}
+
+function loadFileToCanvas(file, canvasId, btnId) {
     const img = new Image();
     img.onload = () => {
         const canvas = document.getElementById(canvasId);
@@ -643,14 +712,34 @@ async function handleOpenImage(e) {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = '';
+    openImageFile(file);
+}
+
+// Single entry point for every way an image arrives:
+// file picker, share sheet, "open with", drag & drop, paste
+async function openImageFile(file) {
+    if (!identity.exists()) {
+        // Keep it until setup is done, then open it automatically
+        state.pendingFile = file;
+        if (state.screen !== 'welcome' && !state.screen.startsWith('setup') && !state.screen.startsWith('restore')) {
+            navigate('welcome');
+        }
+        return;
+    }
+
+    let payload;
+    try {
+        payload = await stego.decodeFile(file);
+    } catch {
+        showOpenStatus(await explainNoMessage(file));
+        return;
+    }
 
     try {
-        // decodeFile tries F5 (JPEG) first, then LSB (PNG) for backward compatibility
-        const payload = await stego.decodeFile(file);
         const parsed = messages.parse(payload);
 
         if (parsed.type === 'duplicate') {
-            alert('This image has already been processed.');
+            showOpenStatus(`<div class="status info">You've already opened this image.</div>`);
             return;
         }
 
@@ -670,18 +759,126 @@ async function handleOpenImage(e) {
                 navigate('received-message');
                 break;
             case 'soul':
-                if (confirm('This image contains an identity. Restore it?')) {
+                if (confirm('This image contains an identity. Restore it? It replaces your current identity.')) {
                     identity.restoreFromPayload(parsed.payload);
-                    // Use the soul bird image as avatar
-                    const soulAvatar = stego.toThumbnail(imageData);
-                    identity.setAvatar(soulAvatar);
+                    identity.setAvatar(stego.toThumbnail(imageData));
                     navigate('home');
                 }
                 break;
         }
     } catch (err) {
-        alert('Error: ' + err.message);
+        // Found a Pigeon message, but it isn't for us (or the invite is unknown)
+        showOpenStatus(`<div class="status error">${esc(err.message)}</div>`);
     }
+}
+
+function showOpenStatus(html) {
+    if (state.screen !== 'home') {
+        navigate('home', { openStatus: html });
+    } else {
+        state.openStatus = html;
+        render();
+    }
+}
+
+async function explainNoMessage(file) {
+    const result = await diagnose(file);
+    const resend = `Ask the sender to send it again <strong>as a file</strong> (Telegram: 📎 → File · WhatsApp: 📎 → Document).`;
+
+    if (result.kind === 'not-jpeg') {
+        return `<div class="status error">
+            <p><strong>No message found.</strong> This image isn't a JPEG, so it was converted somewhere along the way (a screenshot, copy-paste or edit). ${resend}</p>
+        </div>`;
+    }
+    if (result.kind === 'compressed') {
+        const by = result.app ? esc(result.app) : 'a messaging app';
+        const q = result.quality ? ` (quality ≈ ${result.quality})` : '';
+        return `<div class="status error">
+            <p><strong>No message found.</strong> This picture looks compressed by ${by}${q}, which erases hidden messages. ${resend}</p>
+        </div>`;
+    }
+    return `<div class="status info">
+        <p><strong>No Pigeon message in this image.</strong> If it came through a messaging app, it may have been compressed. ${resend}</p>
+    </div>`;
+}
+
+// === Ways in: share sheet, "open with", drag & drop, paste ===
+
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.warn('Service worker registration failed:', err);
+        });
+    }
+}
+
+// Android: image shared to the installed app lands in a cache via sw.js
+async function receiveSharedImage() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('shared') || !('caches' in window)) return;
+    history.replaceState(null, '', location.pathname);
+
+    try {
+        const cache = await caches.open('pigeon-shared');
+        const key = new URL('shared-image', location.href).href;
+        const res = await cache.match(key);
+        if (!res) return;
+        await cache.delete(key);
+
+        const blob = await res.blob();
+        const name = decodeURIComponent(res.headers.get('X-Filename') || 'shared.jpg');
+        openImageFile(new File([blob], name, { type: blob.type || 'image/jpeg' }));
+    } catch (err) {
+        console.error('Could not read shared image:', err);
+    }
+}
+
+// Desktop Chrome: "Open with Pigeon" on a .jpg file
+function receiveLaunchedFile() {
+    if (!('launchQueue' in window)) return;
+    window.launchQueue.setConsumer(async (params) => {
+        if (!params.files?.length) return;
+        const file = await params.files[0].getFile();
+        openImageFile(file);
+    });
+}
+
+function routeIncomingFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+
+    // On a "choose carrier" screen, the image becomes the carrier
+    const carrier = CARRIER_SCREENS[state.screen];
+    if (carrier && document.getElementById(carrier.canvas)) {
+        loadFileToCanvas(file, carrier.canvas, carrier.btn);
+        return;
+    }
+    openImageFile(file);
+}
+
+function setupDropAndPaste() {
+    const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+
+    document.addEventListener('dragover', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        document.body.classList.add('dragging');
+    });
+    document.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget === null) document.body.classList.remove('dragging');
+    });
+    document.addEventListener('drop', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        document.body.classList.remove('dragging');
+        routeIncomingFile(e.dataTransfer.files[0]);
+    });
+    document.addEventListener('paste', (e) => {
+        // Don't hijack pasting text into inputs
+        const file = Array.from(e.clipboardData?.files || []).find(f => f.type.startsWith('image/'));
+        if (!file) return;
+        e.preventDefault();
+        routeIncomingFile(file);
+    });
 }
 
 function selectContact(publicKey) {
@@ -821,6 +1018,7 @@ async function generateBackup() {
         const download = document.getElementById('backup-download');
         download.href = result.dataURL;
         download.classList.remove('hidden');
+        document.getElementById('backup-tip').classList.remove('hidden');
     } catch (err) {
         alert('Error: ' + err.message);
     }

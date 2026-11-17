@@ -1,5 +1,10 @@
-// F5 Steganography wrapper for compression-resistant encoding
-// Uses f5stegojs library for DCT coefficient embedding
+// F5 steganography wrapper (f5stegojs, DCT coefficient embedding)
+//
+// Note: F5 hides data in the exact DCT coefficients of the file. Any
+// re-encode (messaging apps sending as "photo", editors, screenshots)
+// destroys it. Images must travel as files/documents.
+
+import * as codec from './payload-codec.js';
 
 // Default steganographic key (can be customized per-app)
 const DEFAULT_KEY = [112, 105, 103, 101, 111, 110, 45, 107, 101, 121]; // "pigeon-key" as bytes
@@ -7,7 +12,7 @@ const DEFAULT_KEY = [112, 105, 103, 101, 111, 110, 45, 107, 101, 121]; // "pigeo
 /**
  * Encode payload into JPEG using F5 algorithm
  * @param {Uint8Array} jpegData - Source JPEG as Uint8Array
- * @param {Object} payload - Data to encode (will be JSON stringified)
+ * @param {Object} payload - Data to encode (packed with payload-codec)
  * @param {Array<number>} [key] - Optional steganographic key
  * @returns {Uint8Array} - JPEG with embedded data
  */
@@ -16,10 +21,8 @@ export function encode(jpegData, payload, key = DEFAULT_KEY) {
         throw new Error('f5stego library not loaded');
     }
 
-    // Serialize payload to bytes
-    const json = JSON.stringify(payload);
-    const encoder = new TextEncoder();
-    const messageBytes = encoder.encode(json);
+    // Serialize payload to compact bytes
+    const messageBytes = codec.encode(payload);
 
     // Create length prefix (4 bytes, big endian)
     const lengthPrefix = new Uint8Array(4);
@@ -65,8 +68,13 @@ export function decode(jpegData, key = DEFAULT_KEY) {
     // Initialize F5 with key
     const stegger = new f5stego(key);
 
-    // Extract data
-    const extracted = stegger.extract(jpegData);
+    // Extract data (f5stego throws on non-JPEG or damaged files)
+    let extracted;
+    try {
+        extracted = stegger.extract(jpegData);
+    } catch {
+        throw new Error('No hidden data found');
+    }
 
     if (!extracted || extracted.length < 4) {
         throw new Error('No hidden data found');
@@ -81,18 +89,9 @@ export function decode(jpegData, key = DEFAULT_KEY) {
         throw new Error('No hidden data found');
     }
 
-    // Extract message bytes
+    // Extract message bytes and unpack
     const messageBytes = extracted.slice(4, 4 + length);
-
-    // Decode to string
-    const decoder = new TextDecoder();
-    const json = decoder.decode(messageBytes);
-
-    try {
-        return JSON.parse(json);
-    } catch (e) {
-        throw new Error('Invalid payload data');
-    }
+    return codec.decode(messageBytes);
 }
 
 /**

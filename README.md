@@ -22,7 +22,7 @@ Meanwhile, "secure" platforms still control what you say: they can delete conten
 Pigeon hides encrypted messages inside ordinary JPEG images. Send a bird photo through any channel — email, messaging apps, social media — and only the intended recipient can read what's inside.
 
 - **No new app required** — works over platforms you already use
-- **Survives compression** — F5 steganography in DCT coefficients survives Telegram, WhatsApp, and email
+- **Rides any channel that sends files** — Telegram, WhatsApp, Signal (as a file/document) and email deliver the image untouched
 - **Plausible deniability** — "It's just a photo" is an honest answer
 - **Keys never leave your device** — no server ever sees your messages
 
@@ -42,6 +42,25 @@ Pigeon hides encrypted messages inside ordinary JPEG images. Send a bird photo t
 
 The steganography provides **covertness** — the message is invisible.
 The encryption provides **security** — even if extracted, it's unreadable.
+
+### Send images as files, not photos
+
+The hidden message lives in the exact JPEG data. When a messaging app sends a picture *as a photo*, it re-encodes it and the message is erased — in our tests, even a single re-save at the same quality destroyed it. Sending it *as a file* keeps every byte:
+
+| App | How to send |
+|-----|-------------|
+| Telegram | 📎 → File |
+| WhatsApp | 📎 → Document |
+| Signal | 📎 → File |
+| Email | Attach the image |
+
+If an image arrives compressed, Pigeon says so (it reads the JPEG quality and typical app filenames) and suggests asking for it again as a file.
+
+### Opening images
+
+- **Android:** install Pigeon (browser menu → *Install app* / *Add to home screen*), then share a received image straight to Pigeon — it opens and decrypts automatically.
+- **Desktop Chrome:** after installing, Pigeon can be used to *Open with* on `.jpg` files. Drag & drop and paste also work.
+- **Everywhere:** tap **↓ open** and pick the file.
 
 ### Key Exchange
 
@@ -98,9 +117,10 @@ The cover story isn't decoration. It's operational security:
 - Minimal PHP backend (optional, only for encrypted sync)
 
 **Constraints:**
-- Payload capacity: ~1-2KB (depends on carrier image)
+- Payload capacity: ~1-2KB (depends on carrier image); payloads use a compact binary format (~100–180 bytes per message)
+- Images must travel as files: any re-encoding erases the message
 - All processing happens client-side
-- Works offline after initial load
+- Installable PWA, works offline after initial load (all libraries bundled, no CDN)
 
 **Security model:**
 - Keys generated from 128-bit seed (16 bytes → 16 words)
@@ -130,7 +150,7 @@ The sync API requires a PHP server with write access to `../data/users/` relativ
 
 Pigeon's approach is validated by peer-reviewed research:
 
-- **[TRIST: Circumventing Censorship with Transcoding-Resistant Image Steganography](https://www.usenix.org/conference/foci14/workshop-program/presentation/connolly)** (USENIX FOCI '14, SRI International) — Proves DCT coefficient embedding survives social media transcoding
+- **[TRIST: Circumventing Censorship with Transcoding-Resistant Image Steganography](https://www.usenix.org/conference/foci14/workshop-program/presentation/connolly)** (USENIX FOCI '14, SRI International) — Shows transcoding-resistant DCT embedding is possible with dedicated robust techniques. Pigeon's current F5 embedding is not transcoding-resistant; it relies on images being sent as files
 
 - **[A Survey of Internet Censorship and its Measurement](https://arxiv.org/abs/2502.14945)** — Lists steganographic covert channels as viable censorship circumvention alongside Tor and traffic obfuscation
 

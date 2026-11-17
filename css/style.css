@@ -397,3 +397,32 @@ canvas, .preview-image {
     border-radius: var(--radius);
     margin: 1rem 0;
 }
+
+/* Send-as-file tip: only visible once Save / Share are shown */
+.actions.hidden + .send-tip {
+    display: none;
+}
+
+.send-tip {
+    font-style: normal;
+}
+
+.tip-list {
+    list-style: none;
+    padding: 0;
+}
+
+.tip-list li::before {
+    content: "· ";
+    color: var(--muted);
+}
+
+.status p + p {
+    margin-top: 0.5rem;
+}
+
+/* Drag & drop feedback */
+body.dragging .container {
+    outline: 2px dashed var(--fg);
+    outline-offset: -0.5rem;
+}

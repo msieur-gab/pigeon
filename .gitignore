@@ -3,11 +3,13 @@
 *.avif
 *.jpg
 *.jpeg
+!icons/*.png
 
 # Temp files
 *.zip
 *.json
 !package.json
+!manifest.json
 
 # IDE
 .vscode/
