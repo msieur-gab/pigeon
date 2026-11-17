@@ -5,6 +5,7 @@ import * as sync from './services/sync.js';
 import * as stego from './utils/stego.js';
 import * as crypto from './utils/crypto.js';
 import { diagnose } from './utils/diagnose.js';
+import * as flock from './services/flock.js';
 
 // App state
 const state = {
@@ -15,15 +16,16 @@ const state = {
     generatedJpegData: null,  // Raw JPEG bytes for sharing (Uint8Array)
     generatedFilename: null,  // Filename for sharing
     openStatus: null,         // HTML shown on home after an open attempt
-    pendingFile: null         // Image received before an identity existed
+    pendingFile: null,        // Image received before an identity existed
+    currentBirdId: null       // Flock bird shown as the current carrier
 };
 
 // Screens where a dropped/pasted image becomes the carrier
 const CARRIER_SCREENS = {
-    'create-invite': { canvas: 'invite-canvas', btn: 'generate-invite-btn' },
-    'send-message': { canvas: 'send-canvas', btn: 'generate-send-btn' },
-    'received-invite': { canvas: 'accept-canvas', btn: 'generate-accept-btn' },
-    'backup': { canvas: 'backup-canvas', btn: 'generate-backup-btn' }
+    'create-invite': { prefix: 'invite', canvas: 'invite-canvas', btn: 'generate-invite-btn' },
+    'send-message': { prefix: 'send', canvas: 'send-canvas', btn: 'generate-send-btn' },
+    'received-invite': { prefix: 'accept', canvas: 'accept-canvas', btn: 'generate-accept-btn' },
+    'backup': { prefix: 'backup', canvas: 'backup-canvas', btn: 'generate-backup-btn' }
 };
 
 // Show "name (display name)" only when the two differ
@@ -163,6 +165,8 @@ function render() {
     }
     
     attachScreenListeners();
+    if (CARRIER_SCREENS[state.screen]) autoPickCarrier();
+    if (state.screen === 'settings') renderFlock();
 }
 
 // === Screen Renderers ===
@@ -358,6 +362,13 @@ function renderSettings() {
             <button class="btn btn-block" onclick="window.app.saveName()">Save name</button>
         </div>
         <div class="card">
+            <h2>your birds</h2>
+            <p class="text-small text-muted mb-1">Photos Pigeon uses to carry your messages. It picks the one used least recently, with a small random crop each time. Your own photos, not ones posted online, are best.</p>
+            <div class="flock-grid" id="flock-grid"></div>
+            <button class="btn btn-block" onclick="document.getElementById('flock-input').click()">+ add birds</button>
+            <input type="file" id="flock-input" accept="image/*" multiple>
+        </div>
+        <div class="card">
             <h2>sync server</h2>
             <p class="text-small text-muted mb-1">Status: ${syncStatus}</p>
             <div class="field">
@@ -388,7 +399,7 @@ function renderCreateInvite() {
                 <label>first message</label>
                 <textarea id="invite-message" placeholder="Hey! Use this to contact me securely..."></textarea>
             </div>
-            <button class="btn btn-block mb-1" onclick="document.getElementById('invite-image-input').click()">Choose carrier image</button>
+            ${renderCarrierChooser('invite')}
             <input type="file" id="invite-image-input" accept="image/*">
             <canvas id="invite-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-invite-btn" onclick="window.app.generateInvite()">Generate invite image</button>
@@ -417,7 +428,7 @@ function renderSendMessage() {
                 <label>message</label>
                 <textarea id="send-message" placeholder="Your message..."></textarea>
             </div>
-            <button class="btn btn-block mb-1" onclick="document.getElementById('send-image-input').click()">Choose carrier image</button>
+            ${renderCarrierChooser('send')}
             <input type="file" id="send-image-input" accept="image/*">
             <canvas id="send-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
@@ -462,7 +473,7 @@ function renderReceivedInvite() {
                 <label>reply message</label>
                 <textarea id="accept-reply" placeholder="Got your invite!"></textarea>
             </div>
-            <button class="btn btn-block mb-1" onclick="document.getElementById('accept-image-input').click()">Choose carrier image</button>
+            ${renderCarrierChooser('accept')}
             <input type="file" id="accept-image-input" accept="image/*">
             <canvas id="accept-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-accept-btn" onclick="window.app.generateAccept()">Accept & generate reply</button>
@@ -526,6 +537,46 @@ function renderReceivedMessage() {
     `;
 }
 
+// Carrier controls: Pigeon picks a bird from the flock; the user can ask
+// for another one or choose any photo instead.
+function renderCarrierChooser(prefix) {
+    return `
+        <div class="actions mb-1">
+            <button class="btn hidden" id="${prefix}-another-bird" onclick="window.app.anotherBird()">↻ another bird</button>
+            <button class="btn" id="${prefix}-choose-btn" onclick="document.getElementById('${prefix}-image-input').click()">Choose carrier image</button>
+        </div>
+        <p class="text-muted text-small mb-1 hidden" id="${prefix}-flock-hint">Tip: add your own bird photos in ⚙ settings and Pigeon will pick one for you.</p>
+    `;
+}
+
+async function autoPickCarrier(excludeId) {
+    const carrier = CARRIER_SCREENS[state.screen];
+    if (!carrier) return;
+    const screen = state.screen;
+    const bird = await flock.pick(excludeId);
+    if (state.screen !== screen) return; // user navigated away meanwhile
+
+    const another = document.getElementById(`${carrier.prefix}-another-bird`);
+    const choose = document.getElementById(`${carrier.prefix}-choose-btn`);
+    const hint = document.getElementById(`${carrier.prefix}-flock-hint`);
+    if (!choose) return;
+
+    if (!bird) {
+        state.currentBirdId = null;
+        hint?.classList.remove('hidden');
+        return;
+    }
+    state.currentBirdId = bird.id;
+    choose.textContent = 'Use another photo';
+    const all = await flock.getAll().catch(() => []);
+    another.classList.toggle('hidden', all.length < 2);
+    await loadFileToCanvas(bird.blob, carrier.canvas, carrier.btn);
+}
+
+function anotherBird() {
+    autoPickCarrier(state.currentBirdId);
+}
+
 // Hidden messages only survive if the image travels untouched.
 // Hidden until the actions row above it is shown (sibling rule in CSS).
 function renderSendTip() {
@@ -556,7 +607,7 @@ function renderBackup() {
         <div class="card">
             <h2>soul bird</h2>
             <p class="mb-1">Create an image that contains your identity.</p>
-            <button class="btn btn-block mb-1" onclick="document.getElementById('backup-image-input').click()">Choose image</button>
+            ${renderCarrierChooser('backup')}
             <input type="file" id="backup-image-input" accept="image/*">
             <canvas id="backup-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-backup-btn" onclick="window.app.generateBackup()">Generate soul bird</button>
@@ -589,7 +640,9 @@ function setupEventListeners() {
         saveName,
         saveServer,
         syncNow,
-        shareImage
+        shareImage,
+        anotherBird,
+        removeBird
     };
     setupDropAndPaste();
 }
@@ -612,7 +665,8 @@ function attachScreenListeners() {
         { input: 'backup-image-input', canvas: 'backup-canvas', btn: 'generate-backup-btn' },
         { input: 'open-image-input', handler: handleOpenImage },
         { input: 'restore-image-input', handler: handleRestoreImage },
-        { input: 'avatar-input', handler: handleAvatarChange }
+        { input: 'avatar-input', handler: handleAvatarChange },
+        { input: 'flock-input', handler: handleFlockAdd }
     ];
     
     for (const cfg of imageInputs) {
@@ -717,29 +771,45 @@ async function handleAvatarChange(e) {
 function loadImageToCanvas(e, canvasId, btnId) {
     const file = e.target.files[0];
     if (!file) return;
+    e.target.value = '';
+    state.currentBirdId = null; // a hand-picked photo, not from the flock
     loadFileToCanvas(file, canvasId, btnId);
 }
 
+// Draw the carrier, with a small random crop (up to ~6% per side) so two
+// images made from the same photo never share the same pixels or JPEG
+// block grid, then fit within 800x600.
 function loadFileToCanvas(file, canvasId, btnId) {
-    const img = new Image();
-    img.onload = () => {
-        const canvas = document.getElementById(canvasId);
-        const ctx = canvas.getContext('2d');
-        
-        // Resize if needed
-        let w = img.width, h = img.height;
-        const maxW = 800, maxH = 600;
-        if (w > maxW) { h = h * maxW / w; w = maxW; }
-        if (h > maxH) { w = w * maxH / h; h = maxH; }
-        
-        canvas.width = Math.floor(w);
-        canvas.height = Math.floor(h);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        canvas.classList.remove('hidden');
-        document.getElementById(btnId).classList.remove('hidden');
-    };
-    img.src = URL.createObjectURL(file);
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return resolve();
+            const ctx = canvas.getContext('2d');
+
+            const cut = (size) => Math.floor(Math.random() * size * 0.06);
+            const sx = cut(img.width), sy = cut(img.height);
+            const sw = img.width - sx - cut(img.width);
+            const sh = img.height - sy - cut(img.height);
+
+            const scale = Math.min(1, 800 / sw, 600 / sh);
+            canvas.width = Math.max(1, Math.floor(sw * scale));
+            canvas.height = Math.max(1, Math.floor(sh * scale));
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+            canvas.classList.remove('hidden');
+            document.getElementById(btnId)?.classList.remove('hidden');
+            resolve();
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            alert('Could not read this image');
+            resolve();
+        };
+        img.src = url;
+    });
 }
 
 async function handleOpenImage(e) {
@@ -837,6 +907,45 @@ async function explainNoMessage(file) {
     </div>`;
 }
 
+// === Flock management (settings) ===
+
+async function renderFlock() {
+    const grid = document.getElementById('flock-grid');
+    if (!grid) return;
+    let birds;
+    try {
+        birds = await flock.getAll();
+    } catch {
+        grid.innerHTML = `<p class="text-small text-muted">This browser can't store photos, so choose a carrier each time.</p>`;
+        return;
+    }
+    grid.innerHTML = birds.length
+        ? birds.map(b => `
+            <div class="flock-bird">
+                <img src="${b.thumb}" alt="">
+                <button class="flock-remove" aria-label="Remove" onclick="window.app.removeBird('${esc(b.id)}')">×</button>
+            </div>`).join('')
+        : `<p class="text-small text-muted">No birds yet.</p>`;
+}
+
+async function handleFlockAdd(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    try {
+        const added = await flock.add(files);
+        if (added < files.length) alert(`${files.length - added} photo(s) couldn't be read and were skipped.`);
+    } catch (err) {
+        alert('Could not save photos: ' + err.message);
+    }
+    renderFlock();
+}
+
+async function removeBird(id) {
+    await flock.remove(id).catch(() => {});
+    renderFlock();
+}
+
 // === Ways in: share sheet, "open with", drag & drop, paste ===
 
 function registerServiceWorker() {
@@ -884,6 +993,7 @@ function routeIncomingFile(file) {
     // On a "choose carrier" screen, the image becomes the carrier
     const carrier = CARRIER_SCREENS[state.screen];
     if (carrier && document.getElementById(carrier.canvas)) {
+        state.currentBirdId = null;
         loadFileToCanvas(file, carrier.canvas, carrier.btn);
         return;
     }
@@ -944,6 +1054,7 @@ async function generateInvite() {
 
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
+        flock.markUsed(state.currentBirdId);
 
         // Store raw bytes for sharing (created fresh in share handler)
         state.generatedJpegData = result.jpegData;
@@ -976,6 +1087,7 @@ async function generateMessage() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
         recordExchange(state.currentContact.publicKey, 'out');
+        flock.markUsed(state.currentBirdId);
 
         // Store raw bytes for sharing (created fresh in share handler)
         state.generatedJpegData = result.jpegData;
@@ -1022,6 +1134,7 @@ async function generateAccept() {
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
         recordExchange(state.receivedPayload.fromPublicKey, 'out');
+        flock.markUsed(state.currentBirdId);
 
         // Store raw bytes for sharing (created fresh in share handler)
         state.generatedJpegData = result.jpegData;
@@ -1047,6 +1160,7 @@ async function generateBackup() {
     try {
         // F5 encoding (JPEG output - compression resistant)
         const result = await identity.backupToImage(imageData);
+        flock.markUsed(state.currentBirdId);
 
         const output = document.getElementById('backup-output');
         output.src = result.dataURL;

@@ -56,6 +56,10 @@ The hidden message lives in the exact JPEG data. When a messaging app sends a pi
 
 If an image arrives compressed, Pigeon says so (it reads the JPEG quality and typical app filenames) and suggests asking for it again as a file.
 
+### Your birds (carriers)
+
+Add your own photos in **⚙ settings → your birds**. When you write a message, Pigeon picks the bird used least recently and applies a small random crop, so the same photo never produces two images that can be laid over each other. Tap **↻ another bird** to change it, or **use another photo** to pick any image. Photos stay on your device. Your own, unpublished photos are best: a stock photo can be compared against its online original.
+
 ### Opening images
 
 - **Android:** install Pigeon (browser menu → *Install app* / *Add to home screen*), then share a received image straight to Pigeon — it opens and decrypts automatically.

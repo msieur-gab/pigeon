@@ -44,3 +44,5 @@
 - [x] Open by drag & drop and paste
 - [x] Send-as-file guidance and compressed-image diagnosis
 - [x] Escape names/messages in UI (HTML injection)
+- [x] Last exchange per contact (time and direction only)
+- [x] Flock of carrier photos with least-recently-used pick and random crop
