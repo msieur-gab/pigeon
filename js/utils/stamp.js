@@ -35,6 +35,7 @@ function perforationPath(size, teethPerSide, toothRadius) {
 const PRESETS = {
     48:  { teeth: 5,  tooth: 2.5, margin: 7,  border: 0.75, circle: true,  text: false, stroke: 1 },
     64:  { teeth: 6,  tooth: 3,   margin: 10, border: 1,    circle: true,  text: true,  stroke: 1.25 },
+    96:  { teeth: 8,  tooth: 4,   margin: 12, border: 1.25, circle: true,  text: true,  stroke: 1.75 },
     200: { teeth: 14, tooth: 6,   margin: 22, border: 1.5,  circle: true,  text: true,  stroke: 2.5 }
 };
 const PATHS = {};
@@ -62,7 +63,7 @@ function postmark(size, p, label) {
 
 /**
  * @param {number} size - 48, 64 or 200
- * @param {string} src - image URL (data: or blob:)
+ * @param {string} [src] - image URL (data: or blob:); empty draws a blank stamp
  * @param {Object} [opts]
  * @param {boolean} [opts.marked] - draw a postmark
  * @param {string} [opts.label] - postmark text (short, e.g. "17 NOV")
@@ -78,8 +79,12 @@ export function render(size, src, { marked = false, label = 'MAIL', rotation = 0
         <svg class="stamp" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
              style="transform: rotate(${rotation}deg)" aria-hidden="true">
             <path d="${path}" fill="#fff"/>
-            <image x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}"
-                   href="${safeSrc}" preserveAspectRatio="xMidYMid slice"/>
+            ${src
+                ? `<image x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}"
+                          href="${safeSrc}" preserveAspectRatio="xMidYMid slice"/>`
+                : `<rect x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}" fill="#ddd"/>
+                   <text x="${size / 2}" y="${size / 2}" text-anchor="middle" dominant-baseline="central"
+                         font-family="ui-monospace, monospace" font-size="${inner * 0.4}" fill="#888">?</text>`}
             <rect x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}"
                   fill="none" stroke="#999" stroke-width="${p.border}" stroke-opacity="0.6"/>
             ${marked ? postmark(size, p, label) : ''}

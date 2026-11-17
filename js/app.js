@@ -10,7 +10,7 @@ import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-10';
+const APP_VERSION = '2026.11.17-11';
 
 // App state
 const state = {
@@ -274,9 +274,8 @@ function renderHome() {
     const allContacts = contacts.getAll();
     const pending = contacts.getPending();
     
-    const avatarHtml = avatar 
-        ? `<img src="${avatar}" class="avatar" alt="">` 
-        : `<div class="avatar avatar-placeholder">?</div>`;
+    // Your own stamp; tilt seeded by your key so it always sits the same way
+    const avatarHtml = stamp.render(64, avatar, { rotation: stamp.tiltFor(identity.getPublicKey()) });
     
     let contactsHtml = '';
     if (allContacts.length === 0 && pending.length === 0) {
@@ -286,7 +285,7 @@ function renderHome() {
         for (const c of allContacts) {
             const contactAvatar = c.avatar
                 ? stamp.render(48, c.avatar, { marked: c.lastExchange?.dir === 'in', rotation: stamp.tiltFor(c.publicKey) })
-                : `<div class="avatar-small avatar-placeholder">?</div>`;
+                : stamp.render(48, '', { rotation: stamp.tiltFor(c.publicKey) });
             const showDisplay = c.displayName &&
                 c.displayName.trim().toLowerCase() !== (c.name || '').trim().toLowerCase();
             const displayLine = showDisplay
@@ -307,7 +306,7 @@ function renderHome() {
         for (const p of pending) {
             contactsHtml += `
                 <li class="contact-item pending">
-                    <div class="avatar-small avatar-placeholder">?</div>
+                    ${stamp.render(48, '')}
                     <span class="name">${esc(p.name)}</span>
                     <span class="fp">awaiting</span>
                 </li>
@@ -348,9 +347,7 @@ function renderSettings() {
     const server = sync.getServer();
     const syncStatus = sync.isConfigured() ? 'configured' : 'not configured';
     
-    const avatarHtml = avatar 
-        ? `<img src="${avatar}" class="avatar-large" alt="">` 
-        : `<div class="avatar-large avatar-placeholder">?</div>`;
+    const avatarHtml = stamp.render(96, avatar, { rotation: stamp.tiltFor(identity.getPublicKey()) });
     
     return `
         ${renderHeader('settings', true)}
@@ -788,7 +785,7 @@ async function handleRestoreImage(e) {
 
         // Use the soul bird image as avatar
         const { imageData } = await stego.loadImage(file);
-        const avatar = stego.toThumbnail(imageData);
+        const avatar = stego.toThumbnail(imageData, 192);
         identity.setAvatar(avatar);
 
         navigate('home');
@@ -805,7 +802,7 @@ async function handleAvatarChange(e) {
     
     try {
         const { imageData } = await stego.loadImage(file);
-        const avatar = stego.toThumbnail(imageData);
+        const avatar = stego.toThumbnail(imageData, 192);
         identity.setAvatar(avatar);
         sync.scheduleSync();
         render();
@@ -914,7 +911,7 @@ async function openImageFile(file) {
             case 'soul':
                 if (confirm('This image contains an identity. Restore it? It replaces your current identity.')) {
                     identity.restoreFromPayload(parsed.payload);
-                    identity.setAvatar(stego.toThumbnail(imageData));
+                    identity.setAvatar(stego.toThumbnail(imageData, 192));
                     navigate('home');
                 }
                 break;
@@ -1165,7 +1162,7 @@ async function generateAccept() {
 
         // Extract avatar from the carrier image they sent us
         const avatar = state.receivedImageData
-            ? stego.toThumbnail(state.receivedImageData)
+            ? stego.toThumbnail(state.receivedImageData, 128)
             : null;
 
         // Save contact with their display name and avatar
@@ -1220,7 +1217,7 @@ function confirmClaim() {
     
     // Extract avatar from the carrier image they sent
     const avatar = state.receivedImageData 
-        ? stego.toThumbnail(state.receivedImageData) 
+        ? stego.toThumbnail(state.receivedImageData, 128) 
         : null;
     
     contacts.confirmPending(p.pendingInvite.id, p.fromPublicKey, p.fromName, avatar);
