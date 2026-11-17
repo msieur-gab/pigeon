@@ -8,9 +8,10 @@ import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
+import * as image from './utils/image.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-13';
+const APP_VERSION = '2026.11.17-14';
 
 // App state
 const state = {
@@ -788,7 +789,7 @@ async function handleRestoreImage(e) {
 
         // Use the soul bird image as avatar
         const { imageData } = await stego.loadImage(file);
-        const avatar = stego.toThumbnail(imageData, 192);
+        const avatar = image.squareJpeg(imageData, image.AVATAR_SIZE);
         identity.setAvatar(avatar);
 
         navigate('home');
@@ -805,7 +806,7 @@ async function handleAvatarChange(e) {
     
     try {
         const { imageData } = await stego.loadImage(file);
-        const avatar = stego.toThumbnail(imageData, 192);
+        const avatar = image.squareJpeg(imageData, image.AVATAR_SIZE);
         identity.setAvatar(avatar);
         sync.scheduleSync();
         render();
@@ -897,7 +898,7 @@ async function openImageFile(file) {
         const { imageData } = await stego.loadImage(file);
         state.receivedPayload = parsed;
         state.receivedImageData = imageData;
-        state.receivedStamp = stego.toThumbnail(imageData, 400);
+        state.receivedStamp = image.squareJpeg(imageData, image.STAMP_SIZE, 0.85);
         state.receivedAt = Date.now();
 
         switch (parsed.type) {
@@ -914,7 +915,7 @@ async function openImageFile(file) {
             case 'soul':
                 if (confirm('This image contains an identity. Restore it? It replaces your current identity.')) {
                     identity.restoreFromPayload(parsed.payload);
-                    identity.setAvatar(stego.toThumbnail(imageData, 192));
+                    identity.setAvatar(image.squareJpeg(imageData, image.AVATAR_SIZE));
                     navigate('home');
                 }
                 break;
@@ -1165,7 +1166,7 @@ async function generateAccept() {
 
         // Extract avatar from the carrier image they sent us
         const avatar = state.receivedImageData
-            ? stego.toThumbnail(state.receivedImageData, 128)
+            ? image.squareJpeg(state.receivedImageData, image.CONTACT_SIZE)
             : null;
 
         // Save contact with their display name and avatar
@@ -1220,7 +1221,7 @@ function confirmClaim() {
     
     // Extract avatar from the carrier image they sent
     const avatar = state.receivedImageData 
-        ? stego.toThumbnail(state.receivedImageData, 128) 
+        ? image.squareJpeg(state.receivedImageData, image.CONTACT_SIZE) 
         : null;
     
     contacts.confirmPending(p.pendingInvite.id, p.fromPublicKey, p.fromName, avatar);
