@@ -2,7 +2,7 @@
 // lock into the real text from left to right.
 //
 // Cheap on purpose: one requestAnimationFrame loop updating a single text
-// node, capped at ~1.4 s, then it stops. Uses textContent only (no HTML).
+// node, capped at 3 s, then it stops. Uses textContent only (no HTML).
 // Respects the system "reduce motion" setting.
 //
 // To turn it off, set ENABLED to false (the text then just appears).
@@ -12,9 +12,10 @@ export const ENABLED = true;
 // Scramble with the message's own letters (plus a few symbols): their
 // widths match the real text, so lines wrap the same and nothing jumps.
 const EXTRA = '#%&*+=/';
-const MIN_MS = 600;
-const MAX_MS = 1400;
-const MS_PER_CHAR = 18;
+const MIN_MS = 1500;
+const MAX_MS = 3000;
+const MS_PER_CHAR = 35;
+const HOLD = 0.2; // first 20%: everything scrambled, then letters lock in
 
 function glyphPool(chars) {
     const own = chars.filter(c => c.trim());
@@ -52,7 +53,8 @@ export function play(el, text) {
         // ~30 fps is plenty for this look and halves the work
         if (now - lastFrame >= 33 || progress === 1) {
             lastFrame = now;
-            const locked = Math.floor(progress * chars.length);
+            const lockProgress = Math.max(0, (progress - HOLD) / (1 - HOLD));
+            const locked = Math.floor(lockProgress * chars.length);
             let out = '';
             for (let i = 0; i < chars.length; i++) {
                 const c = chars[i];

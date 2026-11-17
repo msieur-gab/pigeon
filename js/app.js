@@ -10,7 +10,7 @@ import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-11';
+const APP_VERSION = '2026.11.17-12';
 
 // App state
 const state = {
