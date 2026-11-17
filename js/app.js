@@ -8,7 +8,7 @@ import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-6';
+const APP_VERSION = '2026.11.17-7';
 
 // App state
 const state = {
@@ -438,9 +438,9 @@ function renderSendMessage() {
             <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
             <img id="send-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="send-actions">
+                <button class="btn" id="send-edit" onclick="window.app.editMessage()">✎ Edit</button>
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
-                <button class="btn" onclick="window.app.editMessage()">✎ Edit</button>
             </div>
             ${renderSendTip()}
         </div>
