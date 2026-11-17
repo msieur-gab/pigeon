@@ -10,7 +10,7 @@ import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-12';
+const APP_VERSION = '2026.11.17-13';
 
 // App state
 const state = {
@@ -532,10 +532,13 @@ function renderReceivedMessage() {
 // The bird that carried it, as a postmarked stamp dated on arrival
 function renderArrivalStamp() {
     if (!state.receivedStamp) return '';
+    const p = state.receivedPayload || {};
+    const fingerprint = p.from?.fingerprint || p.fromFingerprint || '';
     return stamp.render(200, state.receivedStamp, {
         marked: true,
         label: stamp.dateLabel(state.receivedAt),
-        rotation: stamp.tiltFor(state.receivedPayload?.hash)
+        words: fingerprint.split('-'),
+        rotation: stamp.tiltFor(p.hash)
     });
 }
 

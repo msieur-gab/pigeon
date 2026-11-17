@@ -1,94 +1,158 @@
-// Stamp: a carrier photo framed as a perforated postage stamp, with an
-// optional postmark. Ported from the February stamp-avatar prototype.
-// Returns an SVG string; the image is cropped to fill the square.
+// Stamp: a carrier photo framed as a perforated postage stamp, cancelled
+// with a postmark when it has travelled. Returns an SVG string.
+//
+// v2 (17 Nov 2026): round perforation holes, paper tone, fine frame,
+// "PIGEON" printed at the bottom; the cancellation is a circular date
+// stamp overlapping the bottom-left corner, with wavy lines across the
+// picture and the sender's three words written between them, in worn ink.
 
-function perforationPath(size, teethPerSide, toothRadius) {
-    const seg = [];
-    const step = (size - toothRadius * 2) / teethPerSide;
-    const r = toothRadius;
+let uid = 0;
 
-    seg.push(`M ${r} 0`);
-    for (let i = 0; i < teethPerSide; i++) {               // top
-        const c = r + i * step + step / 2;
-        seg.push(`L ${c - r} 0`, `A ${r} ${r} 0 0 0 ${c + r} 0`);
+const INK = '#1d1d1f';
+const PAPER = '#fbfaf5';
+const MONO = "ui-monospace, 'SF Mono', Menlo, monospace";
+
+// hole radius, hole spacing, white margin, frame, printed caption,
+// whether the postmark carries text (too small to read below 96)
+const PRESETS = {
+    48:  { hole: 1.6, gap: 4.6,  margin: 5,  frame: false, caption: false, text: false },
+    64:  { hole: 2.0, gap: 5.6,  margin: 7,  frame: true,  caption: false, text: false },
+    96:  { hole: 2.6, gap: 7.2,  margin: 9,  frame: true,  caption: true,  text: true },
+    200: { hole: 4.2, gap: 11.5, margin: 15, frame: true,  caption: true,  text: true }
+};
+
+// Evenly spaced holes with one on every corner, so all four edges match
+function holes(size, r, gap) {
+    const n = Math.max(3, Math.round(size / gap));
+    const step = size / n;
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+        const p = i * step;
+        out.push([p, 0], [p, size]);
+        if (i > 0 && i < n) out.push([0, p], [size, p]);
     }
-    seg.push(`L ${size - r} 0`, `A ${r} ${r} 0 0 1 ${size} ${r}`);
-    for (let i = 0; i < teethPerSide; i++) {               // right
-        const c = r + i * step + step / 2;
-        seg.push(`L ${size} ${c - r}`, `A ${r} ${r} 0 0 0 ${size} ${c + r}`);
-    }
-    seg.push(`L ${size} ${size - r}`, `A ${r} ${r} 0 0 1 ${size - r} ${size}`);
-    for (let i = teethPerSide - 1; i >= 0; i--) {          // bottom
-        const c = r + i * step + step / 2;
-        seg.push(`L ${c + r} ${size}`, `A ${r} ${r} 0 0 0 ${c - r} ${size}`);
-    }
-    seg.push(`L ${r} ${size}`, `A ${r} ${r} 0 0 1 0 ${size - r}`);
-    for (let i = teethPerSide - 1; i >= 0; i--) {          // left
-        const c = r + i * step + step / 2;
-        seg.push(`L 0 ${c + r}`, `A ${r} ${r} 0 0 0 0 ${c - r}`);
-    }
-    seg.push(`L 0 ${r}`, `A ${r} ${r} 0 0 1 ${r} 0`, 'Z');
-    return seg.join(' ');
+    return out.map(([x, y]) => `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}"/>`).join('');
 }
 
-// Size presets: teeth, tooth radius, white margin, border, postmark detail
-const PRESETS = {
-    48:  { teeth: 5,  tooth: 2.5, margin: 7,  border: 0.75, circle: true,  text: false, stroke: 1 },
-    64:  { teeth: 6,  tooth: 3,   margin: 10, border: 1,    circle: true,  text: true,  stroke: 1.25 },
-    96:  { teeth: 8,  tooth: 4,   margin: 12, border: 1.25, circle: true,  text: true,  stroke: 1.75 },
-    200: { teeth: 14, tooth: 6,   margin: 22, border: 1.5,  circle: true,  text: true,  stroke: 2.5 }
-};
-const PATHS = {};
+function wave(x0, y, len, amp) {
+    const seg = len / 4;
+    let d = `M ${x0.toFixed(2)} ${y.toFixed(2)}`;
+    for (let i = 0; i < 4; i++) {
+        const xs = x0 + i * seg;
+        d += ` Q ${(xs + seg / 2).toFixed(2)} ${(y + (i % 2 ? amp : -amp)).toFixed(2)} ${(xs + seg).toFixed(2)} ${y.toFixed(2)}`;
+    }
+    return d;
+}
 
-function postmark(size, p, label) {
-    const k = size / 100;
-    const ink = '#111';
-    const waves = [[50, 40], [45, 55], [40, 70]].map(([x, y]) =>
-        `<path d="M ${x * k} ${y * k} Q ${(x + 15) * k} ${(y - 10) * k} ${(x + 30) * k} ${y * k} T ${(x + 60) * k} ${y * k}"/>`
-    ).join('');
-    const cx = 25 * k, cy = 75 * k, r = 18 * k;
-    const circle = p.circle ? `<circle cx="${cx}" cy="${cy}" r="${r}" stroke-width="${p.stroke * 0.75}"/>` : '';
-    const text = p.text
-        ? `<text x="${cx}" y="${cy}" font-size="${(label.length > 4 ? 7 : 10) * k}" font-family="ui-monospace, monospace"
-              font-weight="bold" text-anchor="middle" dominant-baseline="central" fill="${ink}" stroke="none"
-              transform="rotate(-15 ${cx} ${cy})">${label}</text>`
-        : '';
+function escapeXml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Same composition at every size, drawn on a 200-unit grid and scaled
+function cancellation(size, id, p, { label, words }) {
+    const k = size / 200;
+    const sw = Math.max(0.8, 1.6 * k);
+    const cx = 44 * k, cy = 158 * k, R = 38 * k, r2 = 31 * k;
+
+    let ringText = '';
+    if (p.text) {
+        const rr = r2 - 4 * k;
+        const ring = `M ${cx - rr} ${cy} a ${rr} ${rr} 0 1 1 ${2 * rr} 0`;
+        ringText = `
+            <path id="${id}-ring" d="${ring}" fill="none" stroke="none"/>
+            <text font-size="${8.5 * k}" letter-spacing="${1.6 * k}" fill="${INK}" stroke="none"
+                  font-family="${MONO}" font-weight="700">
+                <textPath href="#${id}-ring" startOffset="50%" text-anchor="middle">PIGEON POST</textPath>
+            </text>
+            <text x="${cx}" y="${cy + 6 * k}" text-anchor="middle" font-size="${13 * k}" font-weight="700"
+                  fill="${INK}" stroke="none" font-family="${MONO}">${escapeXml(label)}</text>
+            <line x1="${cx - 20 * k}" y1="${cy + 13 * k}" x2="${cx + 20 * k}" y2="${cy + 13 * k}" stroke-width="${sw * 0.6}"/>`;
+    }
+
+    // wavy lines across the picture, running a little past the right edge
+    const x0 = 74 * k, len = 160 * k, amp = 4.5 * k;
+    const ys = [70, 92, 114, 136].map(v => v * k);
+    const lines = ys.map(y => `<path d="${wave(x0, y, len, amp)}" stroke-width="${sw}"/>`).join('');
+
+    // the sender's three words, written between the lines, on the picture
+    const between = p.text ? (words || []).slice(0, 3).map((w, i) => {
+        const y = (ys[i] + ys[i + 1]) / 2 + 3.2 * k;
+        return `<text x="${(96 + i * 7) * k}" y="${y}" font-size="${9 * k}" letter-spacing="${2 * k}"
+                      fill="${INK}" stroke="none" font-weight="700" font-family="${MONO}">${escapeXml(w.toUpperCase())}</text>`;
+    }).join('') : '';
+
     return `
-        <g style="mix-blend-mode: multiply" opacity="0.75">
-            <g transform="rotate(-15 ${size * 0.6} ${size * 0.6})" fill="none" stroke="${ink}"
-               stroke-width="${p.stroke}" stroke-linecap="round">${waves}</g>
-            <g fill="none" stroke="${ink}">${circle}${text}</g>
+        <g filter="url(#${id}-ink)" opacity="0.85" transform="rotate(-6 ${size / 2} ${size / 2})"
+           fill="none" stroke="${INK}" stroke-linecap="round">
+            <circle cx="${cx}" cy="${cy}" r="${R}" stroke-width="${sw}"/>
+            <circle cx="${cx}" cy="${cy}" r="${r2}" stroke-width="${sw * 0.6}"/>
+            ${ringText}${lines}${between}
         </g>`;
 }
 
 /**
- * @param {number} size - 48, 64 or 200
+ * @param {number} size - 48, 64, 96 or 200
  * @param {string} [src] - image URL (data: or blob:); empty draws a blank stamp
  * @param {Object} [opts]
- * @param {boolean} [opts.marked] - draw a postmark
- * @param {string} [opts.label] - postmark text (short, e.g. "17 NOV")
- * @param {number} [opts.rotation] - degrees, a slight tilt looks hand-placed
+ * @param {boolean} [opts.marked] - cancel it with a postmark
+ * @param {string} [opts.label] - date in the postmark circle, e.g. "17 NOV"
+ * @param {string[]} [opts.words] - the sender's three fingerprint words
+ * @param {number} [opts.rotation] - degrees; a slight tilt looks hand-placed
  */
-export function render(size, src, { marked = false, label = 'MAIL', rotation = 0 } = {}) {
+export function render(size, src, { marked = false, label = '', words = [], rotation = 0 } = {}) {
     const p = PRESETS[size] || PRESETS[64];
-    const path = PATHS[size] || (PATHS[size] = perforationPath(size, p.teeth, p.tooth));
-    const inner = size - p.margin * 2;
-    const safeSrc = String(src).replace(/"/g, '%22');
+    const id = `stamp${++uid}`;
+    const m = p.margin;
+    const capH = p.caption ? size * 0.07 : 0;
+    const imgW = size - 2 * m, imgH = size - 2 * m - capH;
+    const safeSrc = String(src || '').replace(/"/g, '%22');
+
+    const picture = src
+        ? `<image x="${m}" y="${m}" width="${imgW}" height="${imgH}" href="${safeSrc}" preserveAspectRatio="xMidYMid slice"/>`
+        : `<rect x="${m}" y="${m}" width="${imgW}" height="${imgH}" fill="#e6e4dc"/>
+           <text x="${size / 2}" y="${m + imgH / 2}" text-anchor="middle" dominant-baseline="central"
+                 font-family="${MONO}" font-size="${imgW * 0.35}" fill="#9a978c">?</text>`;
+
+    const caption = p.caption
+        ? `<text x="${size / 2}" y="${size - m * 0.55 - capH * 0.15}" text-anchor="middle"
+                 font-size="${size * 0.05}" letter-spacing="${size * 0.012}" fill="#6b6860"
+                 font-family="${MONO}">PIGEON</text>`
+        : '';
+
+    const frame = p.frame
+        ? `<rect x="${m - size * 0.012}" y="${m - size * 0.012}" width="${imgW + size * 0.024}" height="${imgH + size * 0.024}"
+                 fill="none" stroke="#c9c5b8" stroke-width="${Math.max(0.5, size * 0.004)}"/>`
+        : '';
+
+    // The cancellation runs past the right edge, like on an envelope; the
+    // negative margin keeps the stamp itself where the layout puts it.
+    const pad = marked ? Math.round(size * 0.18) : 0;
 
     return `
-        <svg class="stamp" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
-             style="transform: rotate(${rotation}deg)" aria-hidden="true">
-            <path d="${path}" fill="#fff"/>
-            ${src
-                ? `<image x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}"
-                          href="${safeSrc}" preserveAspectRatio="xMidYMid slice"/>`
-                : `<rect x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}" fill="#ddd"/>
-                   <text x="${size / 2}" y="${size / 2}" text-anchor="middle" dominant-baseline="central"
-                         font-family="ui-monospace, monospace" font-size="${inner * 0.4}" fill="#888">?</text>`}
-            <rect x="${p.margin}" y="${p.margin}" width="${inner}" height="${inner}"
-                  fill="none" stroke="#999" stroke-width="${p.border}" stroke-opacity="0.6"/>
-            ${marked ? postmark(size, p, label) : ''}
-        </svg>`;
+<svg class="stamp" width="${size + pad}" height="${size}" viewBox="0 0 ${size + pad} ${size}"
+     style="transform: rotate(${rotation}deg); margin-right: -${pad}px; overflow: visible" aria-hidden="true">
+  <defs>
+    <mask id="${id}-holes">
+      <rect width="${size}" height="${size}" fill="#fff"/>
+      <g fill="#000">${holes(size, p.hole, p.gap)}</g>
+    </mask>
+    <filter id="${id}-ink" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="${uid % 7}" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.9 1.2" result="speckle"/>
+      <feComposite in="SourceGraphic" in2="speckle" operator="in"/>
+    </filter>
+    <filter id="${id}-shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0.6" dy="1.4" stdDeviation="1.6" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <g filter="url(#${id}-shadow)">
+    <g mask="url(#${id}-holes)">
+      <rect width="${size}" height="${size}" fill="${PAPER}"/>
+      ${picture}${frame}${caption}
+    </g>
+  </g>
+  ${marked ? cancellation(size, id, p, { label, words }) : ''}
+</svg>`;
 }
 
 /** Stable small tilt (-3..3 degrees) from any string, so a stamp keeps its angle */

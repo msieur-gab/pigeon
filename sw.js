@@ -3,7 +3,7 @@
 //   so new versions show up as soon as you're online)
 // - Receives images shared to the installed app (Android share sheet)
 
-const CACHE = 'pigeon-v5';
+const CACHE = 'pigeon-v6';
 const SHARED_CACHE = 'pigeon-shared';
 
 const SHELL = [
