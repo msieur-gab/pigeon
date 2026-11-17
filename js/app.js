@@ -8,7 +8,7 @@ import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-5';
+const APP_VERSION = '2026.11.17-6';
 
 // App state
 const state = {
@@ -440,6 +440,7 @@ function renderSendMessage() {
             <div class="actions hidden" id="send-actions">
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
+                <button class="btn" onclick="window.app.editMessage()">✎ Edit</button>
             </div>
             ${renderSendTip()}
         </div>
@@ -592,6 +593,21 @@ function showResult(prefix, dataURL) {
     output.classList.remove('hidden');
 }
 
+// Messages to an existing contact can be edited and regenerated freely:
+// nothing is stored when one is made. Brings back the same cropped bird.
+function editMessage() {
+    for (const id of ['send-output', 'send-actions']) {
+        document.getElementById(id)?.classList.add('hidden');
+    }
+    for (const id of ['send-chooser', 'send-canvas', 'generate-send-btn']) {
+        document.getElementById(id)?.classList.remove('hidden');
+    }
+    state.generatedJpegData = null;
+    const text = document.getElementById('send-message');
+    text.disabled = false;
+    text.focus();
+}
+
 function anotherBird() {
     autoPickCarrier(state.currentBirdId);
 }
@@ -661,7 +677,8 @@ function setupEventListeners() {
         syncNow,
         shareImage,
         anotherBird,
-        removeBird
+        removeBird,
+        editMessage
     };
     setupDropAndPaste();
 }
