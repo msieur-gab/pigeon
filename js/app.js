@@ -26,6 +26,12 @@ const CARRIER_SCREENS = {
     'backup': { canvas: 'backup-canvas', btn: 'generate-backup-btn' }
 };
 
+// Show "name (display name)" only when the two differ
+function withDisplayName(name, displayName) {
+    const same = !displayName || displayName.trim().toLowerCase() === (name || '').trim().toLowerCase();
+    return same ? esc(name) : `${esc(name)} (${esc(displayName)})`;
+}
+
 // Escape text that came from other people (names, messages) before it
 // goes into innerHTML
 function esc(value) {
@@ -242,8 +248,10 @@ function renderHome() {
             const contactAvatar = c.avatar 
                 ? `<img src="${c.avatar}" class="avatar-small" alt="">` 
                 : `<div class="avatar-small avatar-placeholder">?</div>`;
-            const displayLine = c.displayName 
-                ? `<span class="display-name">${esc(c.displayName)}</span>` 
+            const showDisplay = c.displayName &&
+                c.displayName.trim().toLowerCase() !== (c.name || '').trim().toLowerCase();
+            const displayLine = showDisplay
+                ? `<span class="display-name">${esc(c.displayName)}</span>`
                 : '';
             contactsHtml += `
                 <li class="contact-item" onclick="window.app.selectContact('${c.publicKey}')">
@@ -368,9 +376,7 @@ function renderSendMessage() {
     const contact = state.currentContact;
     if (!contact) return renderHome();
 
-    const displayInfo = contact.displayName
-        ? `${esc(contact.name)} (${esc(contact.displayName)})`
-        : esc(contact.name);
+    const displayInfo = withDisplayName(contact.name, contact.displayName);
 
     return `
         ${renderHeader('send to ' + contact.name, true)}
@@ -477,9 +483,7 @@ function renderReceivedMessage() {
     const p = state.receivedPayload;
     if (!p) return renderHome();
     
-    const fromInfo = p.from.displayName
-        ? `${esc(p.from.name)} (${esc(p.from.displayName)})`
-        : esc(p.from.name);
+    const fromInfo = withDisplayName(p.from.name, p.from.displayName);
     
     return `
         ${renderHeader('message from ' + p.from.name, true)}
