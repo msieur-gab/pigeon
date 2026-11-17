@@ -9,7 +9,7 @@ import * as flock from './services/flock.js';
 import * as stamp from './utils/stamp.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-8';
+const APP_VERSION = '2026.11.17-9';
 
 // App state
 const state = {
@@ -171,6 +171,7 @@ function render() {
     attachScreenListeners();
     if (CARRIER_SCREENS[state.screen]) autoPickCarrier();
     if (state.screen === 'settings') renderFlock();
+    if (state.screen === 'received-message') setTimeout(revealMessage, 500);
 }
 
 // === Screen Renderers ===
@@ -519,10 +520,7 @@ function renderReceivedMessage() {
     return `
         ${renderHeader('message from ' + p.from.name, true)}
         <div class="card">
-            <button class="arrival-stamp stamp-button" id="reveal-stamp" onclick="window.app.revealMessage()" aria-label="Open the message">
-                ${renderArrivalStamp()}
-            </button>
-            <p class="text-muted text-small text-center" id="reveal-hint">tap the stamp to open</p>
+            <div class="arrival-stamp landing">${renderArrivalStamp()}</div>
             <div class="hidden" id="revealed-message">
                 <p class="text-muted text-small">${fromInfo}</p>
                 <div class="fingerprint mb-1">${p.from.fingerprint}</div>
@@ -594,14 +592,12 @@ function showResult(prefix, dataURL) {
     output.classList.remove('hidden');
 }
 
+// The stamp lands first, then the message fades in underneath
 function revealMessage() {
-    document.getElementById('reveal-hint')?.classList.add('hidden');
     const msg = document.getElementById('revealed-message');
-    if (msg) {
-        msg.classList.remove('hidden');
-        msg.classList.add('reveal');
-    }
-    document.getElementById('reveal-stamp')?.classList.add('opened');
+    if (!msg) return;
+    msg.classList.remove('hidden');
+    msg.classList.add('reveal');
 }
 
 // Messages to an existing contact can be edited and regenerated freely:
