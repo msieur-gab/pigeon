@@ -6,9 +6,10 @@ import * as stego from './utils/stego.js';
 import * as crypto from './utils/crypto.js';
 import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
+import * as stamp from './utils/stamp.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-7';
+const APP_VERSION = '2026.11.17-8';
 
 // App state
 const state = {
@@ -281,8 +282,8 @@ function renderHome() {
     } else {
         contactsHtml = '<ul class="contact-list">';
         for (const c of allContacts) {
-            const contactAvatar = c.avatar 
-                ? `<img src="${c.avatar}" class="avatar-small" alt="">` 
+            const contactAvatar = c.avatar
+                ? stamp.render(48, c.avatar, { marked: c.lastExchange?.dir === 'in', rotation: stamp.tiltFor(c.publicKey) })
                 : `<div class="avatar-small avatar-placeholder">?</div>`;
             const showDisplay = c.displayName &&
                 c.displayName.trim().toLowerCase() !== (c.name || '').trim().toLowerCase();
@@ -451,19 +452,11 @@ function renderReceivedInvite() {
     const p = state.receivedPayload;
     if (!p) return renderHome();
     
-    // Generate thumbnail from carrier image for visual recognition
-    const carrierThumb = state.receivedImageData 
-        ? stego.toThumbnail(state.receivedImageData) 
-        : null;
-    const avatarHtml = carrierThumb 
-        ? `<img src="${carrierThumb}" class="avatar-large" alt="">` 
-        : `<div class="avatar-large avatar-placeholder">?</div>`;
-    
     return `
         ${renderHeader('invite received', true)}
         <div class="card">
+            <div class="arrival-stamp">${renderArrivalStamp()}</div>
             <div class="sender-info">
-                ${avatarHtml}
                 <div>
                     <p class="mb-1">${esc(p.fromName) || 'unnamed'}</p>
                     <div class="fingerprint">${p.fromFingerprint}</div>
@@ -496,19 +489,11 @@ function renderReceivedClaim() {
     const p = state.receivedPayload;
     if (!p) return renderHome();
     
-    // Generate thumbnail from carrier image
-    const carrierThumb = state.receivedImageData 
-        ? stego.toThumbnail(state.receivedImageData) 
-        : null;
-    const avatarHtml = carrierThumb 
-        ? `<img src="${carrierThumb}" class="avatar-large" alt="">` 
-        : `<div class="avatar-large avatar-placeholder">?</div>`;
-    
     return `
         ${renderHeader('invite accepted', true)}
         <div class="card">
+            <div class="arrival-stamp">${renderArrivalStamp()}</div>
             <div class="sender-info">
-                ${avatarHtml}
                 <div>
                     <p>${esc(p.pendingInvite.name)} has responded!</p>
                     <p class="text-muted text-small">${esc(p.fromName) || '(unnamed)'}</p>
@@ -534,12 +519,28 @@ function renderReceivedMessage() {
     return `
         ${renderHeader('message from ' + p.from.name, true)}
         <div class="card">
-            <p class="text-muted text-small">${fromInfo}</p>
-            <div class="fingerprint mb-1">${p.from.fingerprint}</div>
-            <div class="message-preview message-text">"${esc(p.message)}"</div>
-            <button class="btn btn-block mt-1" onclick="window.app.replyTo('${p.from.publicKey}')">Reply</button>
+            <button class="arrival-stamp stamp-button" id="reveal-stamp" onclick="window.app.revealMessage()" aria-label="Open the message">
+                ${renderArrivalStamp()}
+            </button>
+            <p class="text-muted text-small text-center" id="reveal-hint">tap the stamp to open</p>
+            <div class="hidden" id="revealed-message">
+                <p class="text-muted text-small">${fromInfo}</p>
+                <div class="fingerprint mb-1">${p.from.fingerprint}</div>
+                <div class="message-preview message-text">"${esc(p.message)}"</div>
+                <button class="btn btn-block mt-1" onclick="window.app.replyTo('${p.from.publicKey}')">Reply</button>
+            </div>
         </div>
     `;
+}
+
+// The bird that carried it, as a postmarked stamp dated on arrival
+function renderArrivalStamp() {
+    if (!state.receivedStamp) return '';
+    return stamp.render(200, state.receivedStamp, {
+        marked: true,
+        label: stamp.dateLabel(state.receivedAt),
+        rotation: stamp.tiltFor(state.receivedPayload?.hash)
+    });
 }
 
 // Carrier controls: Pigeon picks a bird from the flock; the user can ask
@@ -591,6 +592,16 @@ function showResult(prefix, dataURL) {
     const output = document.getElementById(`${prefix}-output`);
     output.src = dataURL;
     output.classList.remove('hidden');
+}
+
+function revealMessage() {
+    document.getElementById('reveal-hint')?.classList.add('hidden');
+    const msg = document.getElementById('revealed-message');
+    if (msg) {
+        msg.classList.remove('hidden');
+        msg.classList.add('reveal');
+    }
+    document.getElementById('reveal-stamp')?.classList.add('opened');
 }
 
 // Messages to an existing contact can be edited and regenerated freely:
@@ -678,7 +689,8 @@ function setupEventListeners() {
         shareImage,
         anotherBird,
         removeBird,
-        editMessage
+        editMessage,
+        revealMessage
     };
     setupDropAndPaste();
 }
@@ -887,6 +899,8 @@ async function openImageFile(file) {
         const { imageData } = await stego.loadImage(file);
         state.receivedPayload = parsed;
         state.receivedImageData = imageData;
+        state.receivedStamp = stego.toThumbnail(imageData, 400);
+        state.receivedAt = Date.now();
 
         switch (parsed.type) {
             case messages.TYPE.INVITE:

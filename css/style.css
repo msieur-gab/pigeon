@@ -462,3 +462,43 @@ body.dragging .container {
 input:disabled, textarea:disabled {
     opacity: 0.6;
 }
+
+/* Stamps */
+.stamp {
+    filter: drop-shadow(1px 2px 3px rgba(0, 0, 0, 0.2));
+    flex-shrink: 0;
+    display: block;
+}
+
+.arrival-stamp {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem auto 1rem;
+}
+
+.stamp-button {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.stamp-button:hover {
+    background: none;
+    transform: scale(1.02);
+}
+
+.stamp-button.opened {
+    cursor: default;
+    transform: scale(0.9);
+}
+
+.reveal {
+    animation: reveal 0.5s ease-out;
+}
+
+@keyframes reveal {
+    from { opacity: 0; transform: translateY(-0.5rem); }
+    to { opacity: 1; transform: none; }
+}
