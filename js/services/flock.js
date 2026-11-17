@@ -2,6 +2,8 @@
 // Pigeon picks the least recently used bird for each new image, so the same
 // photo isn't sent over and over.
 
+import { squareJpeg } from '../utils/image.js';
+
 const DB_NAME = 'pigeon';
 const STORE = 'flock';
 const MAX_EDGE = 1200;   // stored size; carriers are drawn at max 800x600
@@ -55,15 +57,6 @@ function drawScaled(img, maxW, maxH) {
     return canvas;
 }
 
-function squareThumb(img) {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = THUMB;
-    const side = Math.min(img.width, img.height);
-    canvas.getContext('2d').drawImage(img,
-        (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, THUMB, THUMB);
-    return canvas.toDataURL('image/jpeg', 0.8);
-}
-
 /** All birds, oldest first (without blobs needing to be read separately) */
 export async function getAll() {
     const birds = await tx('readonly', store => store.getAll());
@@ -82,7 +75,7 @@ export async function add(files) {
             const bird = {
                 id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
                 blob,
-                thumb: squareThumb(img),
+                thumb: squareJpeg(img, THUMB),
                 addedAt: Date.now(),
                 lastUsed: 0
             };

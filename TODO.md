@@ -6,10 +6,10 @@ to" with the reason, when it's settled.
 
 ## Repository
 
-- [ ] Merge PR #1 (`ux-improvements` → `master`, fast-forward)
+- [x] Merge PR #1 (`ux-improvements` → `master`)
 - [ ] Settings → General: make `master` the default branch
 - [ ] Settings → Pages: deploy from `master` (same address)
-- [ ] Delete `feature/f5-steganography`, `feature/pwa` and `ux-improvements` (GitHub offers *Restore* right after)
+- [ ] Delete `feature/f5-steganography` and `feature/pwa` (GitHub offers *Restore* right after; `ux-improvements` is already gone)
 
 ## Security
 
@@ -27,7 +27,6 @@ to" with the reason, when it's settled.
 Works today: a fresh phone restored from the 16 words gets back name, contacts and pending invites (tested against `api/sync.php`).
 
 - [ ] **Server address on the restore screens**: on a new phone the server must be set before restoring, and the restore screens don't ask for it
-- [ ] **Contact pictures as JPEG** in the backup: PNG thumbnails hit the server's 1 MB limit at around 25 contacts
 - [ ] **Signed uploads**: anyone with your public key (everyone you invited) can compute your backup address and overwrite or erase it (they can't read it)
   - [ ] Add request signing for PUT requests (prove ownership of the key)
   - [ ] Verify the signature before allowing overwrites
@@ -75,3 +74,4 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] Stamps: received birds, contacts and your avatar; postmark with date and the sender's three words
 - [x] Message reveal with deciphering effect (revertible: `ENABLED` flag)
 - [x] Version shown in Settings
+- [x] Pictures stored as small JPEG (contacts 96 px, your avatar 192 px): ~2–5 KB each instead of ~40 KB, so the backup fits a few hundred contacts (WebP left out: Safari can't create it)

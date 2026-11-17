@@ -76,28 +76,5 @@ export function loadImage(file) {
     });
 }
 
-/**
- * Create thumbnail from imageData (for avatars)
- */
-export function toThumbnail(imageData, size = 64) {
-    const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = imageData.width;
-    srcCanvas.height = imageData.height;
-    srcCanvas.getContext('2d').putImageData(imageData, 0, 0);
-
-    const thumbCanvas = document.createElement('canvas');
-    thumbCanvas.width = size;
-    thumbCanvas.height = size;
-    const ctx = thumbCanvas.getContext('2d');
-
-    const srcSize = Math.min(imageData.width, imageData.height);
-    const srcX = (imageData.width - srcSize) / 2;
-    const srcY = (imageData.height - srcSize) / 2;
-
-    ctx.drawImage(srcCanvas, srcX, srcY, srcSize, srcSize, 0, 0, size, size);
-
-    return thumbCanvas.toDataURL('image/png');
-}
-
 // Re-export F5 utilities for direct access
 export { f5 };
