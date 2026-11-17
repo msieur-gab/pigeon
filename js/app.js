@@ -80,11 +80,22 @@ function esc(value) {
         .replace(/'/g, '&#39;');
 }
 
+// Apply a theme and colour the Android status bar to match the page background.
+// The theme is chosen in the app (not by the phone), so both theme-color tags
+// get the same colour; their media queries only matter for the first paint.
+const THEME_BAR = { light: '#ffffff', dark: '#111111' };
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+        meta.setAttribute('content', THEME_BAR[theme] || THEME_BAR.light);
+    });
+}
+
 // Initialize app
 export function init() {
     // Load theme
-    const savedTheme = localStorage.getItem('pigeon_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    applyTheme(localStorage.getItem('pigeon_theme') || 'light');
     
     // Load server URL
     const savedServer = localStorage.getItem('pigeon_server') || '';
@@ -402,7 +413,7 @@ function renderCreateInvite() {
             </div>
             <div class="field">
                 <label>first message</label>
-                <textarea id="invite-message" placeholder="Hey! Use this to contact me securely..."></textarea>
+                <textarea id="invite-message">Hey! Use this to contact me securely...</textarea>
             </div>
             ${renderCarrierChooser('invite')}
             <input type="file" id="invite-image-input" accept="image/*">
@@ -735,7 +746,7 @@ function attachScreenListeners() {
 function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
+    applyTheme(next);
     localStorage.setItem('pigeon_theme', next);
     render();
 }
