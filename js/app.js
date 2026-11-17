@@ -7,9 +7,10 @@ import * as crypto from './utils/crypto.js';
 import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 import * as stamp from './utils/stamp.js';
+import * as decipher from './utils/decipher.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.17-9';
+const APP_VERSION = '2026.11.17-10';
 
 // App state
 const state = {
@@ -524,7 +525,7 @@ function renderReceivedMessage() {
             <div class="hidden" id="revealed-message">
                 <p class="text-muted text-small">${fromInfo}</p>
                 <div class="fingerprint mb-1">${p.from.fingerprint}</div>
-                <div class="message-preview message-text">"${esc(p.message)}"</div>
+                <div class="message-preview message-text" id="message-body">"${esc(p.message)}"</div>
                 <button class="btn btn-block mt-1" onclick="window.app.replyTo('${p.from.publicKey}')">Reply</button>
             </div>
         </div>
@@ -598,6 +599,7 @@ function revealMessage() {
     if (!msg) return;
     msg.classList.remove('hidden');
     msg.classList.add('reveal');
+    decipher.play(document.getElementById('message-body'), `"${state.receivedPayload.message}"`);
 }
 
 // Messages to an existing contact can be edited and regenerated freely:
