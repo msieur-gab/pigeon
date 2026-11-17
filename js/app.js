@@ -32,6 +32,35 @@ function withDisplayName(name, displayName) {
     return same ? esc(name) : `${esc(name)} (${esc(displayName)})`;
 }
 
+// Last exchange per contact: direction + time only, never the content.
+// Decrypted text is never stored; the images themselves are the archive.
+function recordExchange(publicKey, dir) {
+    try {
+        contacts.update(publicKey, { lastExchange: { dir, at: Date.now() } });
+        sync.scheduleSync();
+    } catch {
+        // Unknown contact: nothing to record
+    }
+}
+
+function formatWhen(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (ts >= startOfToday) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (ts >= startOfToday - 86400000) return 'yesterday';
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
+function renderLastExchange(c) {
+    if (!c.lastExchange) return '';
+    const { dir, at } = c.lastExchange;
+    const label = dir === 'in' ? '↓ received' : '↑ sent';
+    return `<span class="last-exchange">${label} ${esc(formatWhen(at))}</span>`;
+}
+
 // Escape text that came from other people (names, messages) before it
 // goes into innerHTML
 function esc(value) {
@@ -259,6 +288,7 @@ function renderHome() {
                     <div class="contact-info">
                         <span class="name">${esc(c.name)}</span>
                         ${displayLine}
+                        ${renderLastExchange(c)}
                     </div>
                     <span class="fp">${c.fingerprint}</span>
                 </li>
@@ -760,6 +790,7 @@ async function openImageFile(file) {
                 navigate('received-claim');
                 break;
             case messages.TYPE.MESSAGE:
+                recordExchange(parsed.from.publicKey, 'in');
                 navigate('received-message');
                 break;
             case 'soul':
@@ -944,6 +975,7 @@ async function generateMessage() {
 
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
+        recordExchange(state.currentContact.publicKey, 'out');
 
         // Store raw bytes for sharing (created fresh in share handler)
         state.generatedJpegData = result.jpegData;
@@ -989,6 +1021,7 @@ async function generateAccept() {
 
         // F5 encoding (JPEG output - compression resistant)
         const result = await stego.encodeRobust(imageData, payload);
+        recordExchange(state.receivedPayload.fromPublicKey, 'out');
 
         // Store raw bytes for sharing (created fresh in share handler)
         state.generatedJpegData = result.jpegData;
@@ -1037,6 +1070,7 @@ function confirmClaim() {
         : null;
     
     contacts.confirmPending(p.pendingInvite.id, p.fromPublicKey, p.fromName, avatar);
+    recordExchange(p.fromPublicKey, 'in');
     messages.markProcessed(p.hash);
     sync.scheduleSync();
     navigate('home');
