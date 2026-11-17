@@ -541,7 +541,7 @@ function renderReceivedMessage() {
 // for another one or choose any photo instead.
 function renderCarrierChooser(prefix) {
     return `
-        <div class="actions mb-1">
+        <div class="actions mb-1" id="${prefix}-chooser">
             <button class="btn hidden" id="${prefix}-another-bird" onclick="window.app.anotherBird()">↻ another bird</button>
             <button class="btn" id="${prefix}-choose-btn" onclick="document.getElementById('${prefix}-image-input').click()">Choose carrier image</button>
         </div>
@@ -571,6 +571,21 @@ async function autoPickCarrier(excludeId) {
     const all = await flock.getAll().catch(() => []);
     another.classList.toggle('hidden', all.length < 2);
     await loadFileToCanvas(bird.blob, carrier.canvas, carrier.btn);
+}
+
+// Once the image is made, it replaces the preview: hide the carrier
+// controls and the source photo, freeze the text that went into it, and
+// show the result with Save / Share. To change anything, start a new one.
+function showResult(prefix, dataURL) {
+    for (const id of [`${prefix}-chooser`, `${prefix}-flock-hint`, `${prefix}-canvas`, `generate-${prefix}-btn`]) {
+        document.getElementById(id)?.classList.add('hidden');
+    }
+    document.querySelectorAll('#app .card input:not([type="file"]), #app .card textarea')
+        .forEach(el => { el.disabled = true; });
+
+    const output = document.getElementById(`${prefix}-output`);
+    output.src = dataURL;
+    output.classList.remove('hidden');
 }
 
 function anotherBird() {
@@ -1060,9 +1075,7 @@ async function generateInvite() {
         state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-invite.jpg';
 
-        const output = document.getElementById('invite-output');
-        output.src = result.dataURL;
-        output.classList.remove('hidden');
+        showResult('invite', result.dataURL);
 
         const download = document.getElementById('invite-download');
         download.href = result.dataURL;
@@ -1093,9 +1106,7 @@ async function generateMessage() {
         state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-message.jpg';
 
-        const output = document.getElementById('send-output');
-        output.src = result.dataURL;
-        output.classList.remove('hidden');
+        showResult('send', result.dataURL);
 
         const download = document.getElementById('send-download');
         download.href = result.dataURL;
@@ -1140,9 +1151,7 @@ async function generateAccept() {
         state.generatedJpegData = result.jpegData;
         state.generatedFilename = 'pigeon-accept.jpg';
 
-        const output = document.getElementById('accept-output');
-        output.src = result.dataURL;
-        output.classList.remove('hidden');
+        showResult('accept', result.dataURL);
 
         const download = document.getElementById('accept-download');
         download.href = result.dataURL;
@@ -1162,9 +1171,7 @@ async function generateBackup() {
         const result = await identity.backupToImage(imageData);
         flock.markUsed(state.currentBirdId);
 
-        const output = document.getElementById('backup-output');
-        output.src = result.dataURL;
-        output.classList.remove('hidden');
+        showResult('backup', result.dataURL);
 
         const download = document.getElementById('backup-download');
         download.href = result.dataURL;

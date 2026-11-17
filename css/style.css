@@ -458,3 +458,7 @@ body.dragging .container {
     font-size: 0.875rem;
     line-height: 1.25rem;
 }
+
+input:disabled, textarea:disabled {
+    opacity: 0.6;
+}
