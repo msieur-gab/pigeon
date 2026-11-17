@@ -11,25 +11,25 @@ export const TYPE = {
 };
 
 // Create invite payload
-export function createInvite(message, avatar = null) {
+// Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
+// Recipient extracts avatar from carrier image instead
+export function createInvite(message) {
     const myPublicKey = identity.getPublicKey();
     const myName = identity.getName();
-    const myAvatar = avatar || identity.getAvatar();
     if (!myPublicKey) throw new Error('No identity');
-    
+
     // Generate temporary symmetric key for this invite
     const tempKey = crypto.generateSymmetricKey();
     const tempKeyBase64 = crypto.encodeBase64(tempKey);
-    
+
     // Encrypt message with temp key
     const encrypted = crypto.encryptSymmetric(message, tempKey);
-    
+
     return {
         payload: {
             t: TYPE.INVITE,
             from: myPublicKey,
             name: myName,
-            avatar: myAvatar,
             temp: tempKeyBase64,
             msg: encrypted.cipher,
             nonce: encrypted.nonce
@@ -39,20 +39,20 @@ export function createInvite(message, avatar = null) {
 }
 
 // Create claim payload (response to invite)
-export function createClaim(message, tempKey, avatar = null) {
+// Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
+// Recipient extracts avatar from carrier image instead
+export function createClaim(message, tempKey) {
     const myPublicKey = identity.getPublicKey();
     const myName = identity.getName();
-    const myAvatar = avatar || identity.getAvatar();
     if (!myPublicKey) throw new Error('No identity');
-    
+
     // Encrypt reply with temp key
     const encrypted = crypto.encryptSymmetric(message, tempKey);
-    
+
     return {
         t: TYPE.CLAIM,
         from: myPublicKey,
         name: myName,
-        avatar: myAvatar,
         msg: encrypted.cipher,
         nonce: encrypted.nonce
     };
