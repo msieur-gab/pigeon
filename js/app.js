@@ -7,6 +7,9 @@ import * as crypto from './utils/crypto.js';
 import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 
+// Shown at the bottom of settings, to check which build is running
+const APP_VERSION = '2026.11.17-5';
+
 // App state
 const state = {
     screen: 'loading',
@@ -384,6 +387,7 @@ function renderSettings() {
             <h2>backup</h2>
             <button class="btn btn-block mb-1" onclick="window.app.navigate('backup')">View recovery words</button>
         </div>
+        <p class="text-muted text-small text-center mb-1">pigeon ${APP_VERSION}</p>
     `;
 }
 

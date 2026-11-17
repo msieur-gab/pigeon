@@ -3,7 +3,7 @@
 //   so new versions show up as soon as you're online)
 // - Receives images shared to the installed app (Android share sheet)
 
-const CACHE = 'pigeon-v2';
+const CACHE = 'pigeon-v3';
 const SHARED_CACHE = 'pigeon-shared';
 
 const SHELL = [
@@ -32,7 +32,9 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting())
+        caches.open(CACHE)
+            .then(cache => cache.addAll(SHELL.map(url => new Request(url, { cache: 'no-cache' }))))
+            .then(() => self.skipWaiting())
     );
 });
 
@@ -87,7 +89,10 @@ async function receiveShare(req) {
 async function networkFirst(req) {
     const cache = await caches.open(CACHE);
     try {
-        const res = await fetch(req);
+        // 'no-cache' revalidates with the server (cheap 304 when unchanged),
+        // so a new deploy shows up on the next load instead of after
+        // GitHub Pages' 10-minute browser cache expires.
+        const res = await fetch(req, { cache: 'no-cache' });
         if (res.ok) cache.put(req, res.clone());
         return res;
     } catch {
