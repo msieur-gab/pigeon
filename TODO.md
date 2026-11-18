@@ -45,6 +45,9 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 
 ## Design & experience
 
+- [ ] **Opening a message as a side panel**: the decrypted message slides in from the side like a panel, and a swipe from right to left closes it (lock the other gestures while it's open). Idea to think through: an animation that feels like receiving a new letter
+- [ ] **+ sheet**: redesign pass later (layout approved as a first version)
+
 - [ ] **Stamp**: check the sender's words stay readable on dark photos
 - [ ] **Contacts as a grid of stamps** (February idea: a collectible grid, fingerprint shown on tap) — not started
 - [ ] **Telegram style** for messages (February idea: STOP between sentences, dimmed) — not started
@@ -81,4 +84,5 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] Message reveal with deciphering effect (revertible: `ENABLED` flag)
 - [x] Version shown in Settings
 - [x] Meet in person: QR code on a stamp, in-app scanner (native on Android, jsQR elsewhere), camera link with `#meet=`
+- [x] Add a contact from a **+** button and a bottom sheet (meet in person / send an invite); ↓ open is a quiet button under your identity
 - [x] Pictures stored as small JPEG (contacts 96 px, your avatar 192 px): ~2–5 KB each instead of ~40 KB, so the backup fits a few hundred contacts (WebP left out: Safari can't create it)

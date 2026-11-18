@@ -10,9 +10,10 @@ import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
 import * as image from './utils/image.js';
 import * as qr from './utils/qr.js';
+import * as addSheet from './add-sheet.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-1';
+const APP_VERSION = '2026.11.18-2';
 
 // App state
 const state = {
@@ -25,9 +26,6 @@ const state = {
     openStatus: null,         // HTML shown on home after an open attempt
     pendingFile: null,        // Image received before an identity existed
     pendingMeet: null,        // Meet link opened before an identity existed
-    meetContact: null,        // { publicKey, name } read from a scanned code
-    meetStatus: null,         // HTML shown on the meet screen
-    stopScan: null,           // Stops the camera while scanning
     currentBirdId: null       // Flock bird shown as the current carrier
 };
 
@@ -117,6 +115,14 @@ export function init() {
         navigate(identity.exists() ? 'home' : 'welcome');
     });
 
+    addSheet.init({
+        onAdded: () => {
+            sync.scheduleSync();
+            if (state.screen === 'home') render();
+        },
+        onInvite: () => navigate('create-invite')
+    });
+
     // Check identity
     if (identity.exists()) {
         navigate('home');
@@ -134,17 +140,19 @@ export function init() {
 
 // Navigation
 export function navigate(screen, data = {}) {
-    // A meet link is waiting: add that contact before anything else
+    addSheet.close();
+
+    // A meet link is waiting: offer to add that contact first
     if (screen === 'home' && state.pendingMeet && identity.exists()) {
         const met = state.pendingMeet;
         state.pendingMeet = null;
-        navigate('meet-confirm', { meetContact: met });
+        navigate('home', data);
+        addSheet.open('confirm', met);
         return;
     }
 
     state.screen = screen;
     state.openStatus = null;
-    state.meetStatus = null;
     Object.assign(state, data);
     render();
 
@@ -159,7 +167,9 @@ export function navigate(screen, data = {}) {
 // Render current screen
 function render() {
     const app = document.getElementById('app');
-    stopScan(); // the <video> is about to be replaced
+    // The + button belongs to home
+    document.getElementById('fab')?.classList.toggle('hidden', state.screen !== 'home');
+    document.body.classList.toggle('has-fab', state.screen === 'home');
 
     switch (state.screen) {
         case 'welcome':
@@ -201,17 +211,13 @@ function render() {
         case 'backup':
             app.innerHTML = renderBackup();
             break;
-        case 'meet':
-            app.innerHTML = renderMeet();
-            break;
-        case 'meet-confirm':
-            app.innerHTML = renderMeetConfirm();
-            break;
+
         default:
             app.innerHTML = '<p>Loading...</p>';
     }
     
     attachScreenListeners();
+    if (state.screen === 'home') addSheet.bindChoices(app);
     if (CARRIER_SCREENS[state.screen]) autoPickCarrier();
     if (state.screen === 'settings') renderFlock();
     if (state.screen === 'received-message') setTimeout(revealMessage, 500);
@@ -322,7 +328,7 @@ function renderHome() {
     
     let contactsHtml = '';
     if (allContacts.length === 0 && pending.length === 0) {
-        contactsHtml = '<div class="empty">No contacts yet</div>';
+        contactsHtml = `<p class="text-muted text-small mb-1">No contacts yet. Add your first one:</p>${addSheet.choicesHtml()}`;
     } else {
         contactsHtml = '<ul class="contact-list">';
         for (const c of allContacts) {
@@ -370,14 +376,10 @@ function renderHome() {
                 <button class="btn btn-ghost" onclick="window.app.navigate('settings')">⚙</button>
             </div>
         </div>
-        <div class="actions mb-1">
-            <button class="btn" onclick="window.app.navigate('create-invite')">+ invite</button>
-            <button class="btn" onclick="window.app.navigate('meet')">▦ meet</button>
-            <button class="btn" onclick="document.getElementById('open-image-input').click()">↓ open</button>
-            <input type="file" id="open-image-input" accept="image/*">
-        </div>
+        <button class="btn open-btn" onclick="document.getElementById('open-image-input').click()">↓ open a pigeon image</button>
+        <input type="file" id="open-image-input" accept="image/*">
         ${state.openStatus || ''}
-        <p class="text-muted text-small mb-1 drop-hint">Open a pigeon image: tap ↓ open, share it to Pigeon, or drop / paste it here.</p>
+        <p class="text-muted text-small mb-1 drop-hint">You can also share an image to Pigeon, or drop / paste it here.</p>
         <div class="card">
             <h2>contacts</h2>
             ${contactsHtml}
@@ -574,72 +576,6 @@ function renderReceivedMessage() {
 }
 
 // The bird that carried it, as a postmarked stamp dated on arrival
-// Meet in person: your code as a stamp, and a camera to scan theirs
-function renderMeet() {
-    const link = qr.meetLink(identity.getPublicKey(), identity.getName());
-    const code = stamp.render(200, qr.qrDataUrl(link), { contain: true });
-
-    return `
-        ${renderHeader('meet', true)}
-        ${state.meetStatus || ''}
-        <div class="card">
-            <p class="text-muted text-small mb-1">Together in the same place? Each of you scans the other's code. That's all.</p>
-            <div class="meet-code">${code}</div>
-            <div class="fingerprint">${identity.getFingerprint()}</div>
-        </div>
-        <div class="card">
-            <div id="scanner" class="scanner hidden"><video id="scanner-video" playsinline muted></video></div>
-            <div id="scan-status"></div>
-            <button class="btn btn-block" id="scan-btn" onclick="window.app.toggleScan()">Scan their code</button>
-        </div>
-    `;
-}
-
-function renderMeetConfirm() {
-    const m = state.meetContact;
-    if (!m) return renderHome();
-
-    const back = `<button class="btn btn-block btn-ghost" onclick="window.app.navigate('meet')">Back</button>`;
-
-    if (m.publicKey === identity.getPublicKey()) {
-        return `
-            ${renderHeader('meet', true)}
-            <div class="card">
-                <p class="mb-1">That's your own code. Scan the code on the other person's phone.</p>
-                ${back}
-            </div>
-        `;
-    }
-
-    const existing = contacts.getByPublicKey(m.publicKey);
-    if (existing) {
-        return `
-            ${renderHeader('meet', true)}
-            <div class="card">
-                <p class="mb-1">${esc(existing.name)} is already in your contacts.</p>
-                <div class="fingerprint mb-1">${existing.fingerprint}</div>
-                ${back}
-            </div>
-        `;
-    }
-
-    return `
-        ${renderHeader('meet', true)}
-        <div class="card">
-            <div class="arrival-stamp landing">${stamp.render(96, '', { rotation: stamp.tiltFor(m.publicKey) })}</div>
-            <p class="mb-1">${esc(m.name) || 'unnamed'}</p>
-            <div class="fingerprint">${crypto.fingerprint(m.publicKey)}</div>
-            <p class="text-muted text-small mt-1 mb-1">Their screen should show the same three words.</p>
-            <div class="field">
-                <label>save contact as</label>
-                <input type="text" id="meet-name" value="${esc(m.name)}" placeholder="Bob">
-            </div>
-            <button class="btn btn-block mb-1" onclick="window.app.addMet()">Add contact</button>
-            ${back}
-        </div>
-    `;
-}
-
 function renderArrivalStamp() {
     if (!state.receivedStamp) return '';
     const p = state.receivedPayload || {};
@@ -799,8 +735,7 @@ function setupEventListeners() {
         removeBird,
         editMessage,
         revealMessage,
-        toggleScan,
-        addMet
+        openAddSheet: (step) => addSheet.open(step)
     };
     setupDropAndPaste();
 }
@@ -1354,90 +1289,6 @@ function takeMeetLink() {
     const met = qr.parseMeetLink(location.hash);
     history.replaceState(null, '', location.pathname + location.search);
     return met;
-}
-
-function stopScan() {
-    if (state.stopScan) {
-        state.stopScan();
-        state.stopScan = null;
-    }
-}
-
-function setScanStatus(html) {
-    const el = document.getElementById('scan-status');
-    if (el) el.innerHTML = html;
-}
-
-async function toggleScan() {
-    const box = document.getElementById('scanner');
-    const btn = document.getElementById('scan-btn');
-    if (!box || !btn) return;
-
-    if (state.stopScan) {
-        stopScan();
-        box.classList.add('hidden');
-        btn.textContent = 'Scan their code';
-        setScanStatus('');
-        return;
-    }
-
-    btn.disabled = true;
-    setScanStatus('');
-    try {
-        const stop = await qr.startScanner(document.getElementById('scanner-video'), (text) => {
-            const met = qr.parseMeetLink(text);
-            if (!met) {
-                setScanStatus(`<div class="status info">That's not a Pigeon code. Point at the code on their meet screen.</div>`);
-                return false;
-            }
-            if (met.publicKey === identity.getPublicKey()) {
-                setScanStatus(`<div class="status info">That's your own code.</div>`);
-                return false;
-            }
-            state.stopScan = null; // the scanner stops itself
-            if (navigator.vibrate) navigator.vibrate(30);
-            navigate('meet-confirm', { meetContact: met });
-            return true;
-        });
-        // The screen may have changed while the camera was starting
-        if (state.screen !== 'meet' || !document.getElementById('scanner')) {
-            stop();
-            return;
-        }
-        state.stopScan = stop;
-        box.classList.remove('hidden');
-        btn.textContent = 'Stop';
-    } catch (err) {
-        const why = {
-            NotAllowedError: 'Camera access was refused. Allow it in the browser settings and try again.',
-            NotFoundError: 'No camera found on this device.',
-            NotReadableError: 'The camera is busy in another app.',
-            NotSupportedError: 'This browser can\'t use the camera here.'
-        }[err.name] || `The camera didn't start (${esc(err.message)}).`;
-        setScanStatus(`<div class="status error">${why} They can still scan your code; for them to reach you, send them a <strong>+ invite</strong> instead.</div>`);
-    } finally {
-        btn.disabled = false;
-    }
-}
-
-function addMet() {
-    const m = state.meetContact;
-    if (!m) return navigate('home');
-    const name = document.getElementById('meet-name').value.trim() || m.name;
-    if (!name) { alert('Please enter a name'); return; }
-
-    try {
-        // No picture yet: the first bird they send becomes their stamp
-        contacts.add(name, m.publicKey, m.name, null);
-    } catch (err) {
-        alert(err.message);
-        return;
-    }
-    sync.scheduleSync();
-    navigate('meet', {
-        meetContact: null,
-        meetStatus: `<div class="status info"><strong>${esc(name)}</strong> is in your contacts. If they haven't scanned your code yet, let them scan it now.</div>`
-    });
 }
 
 function rejectClaim() {

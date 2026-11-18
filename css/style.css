@@ -498,28 +498,247 @@ input:disabled, textarea:disabled {
     to { opacity: 1; transform: none; }
 }
 
-/* Meet in person */
-.meet-code {
-    display: flex;
-    justify-content: center;
-    margin: 0.5rem 0 1rem;
+/* Home: quiet open button */
+.open-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.5rem;
+    border-color: var(--border);
+    color: var(--muted);
 }
 
-.meet-code .stamp {
-    width: min(78vw, 300px);
+/* Room under the list for the + button */
+body.has-fab .container {
+    padding-bottom: 6rem;
+}
+
+/* + button, bottom right */
+.fab {
+    position: fixed;
+    right: max(1.25rem, env(safe-area-inset-right));
+    bottom: max(1.25rem, env(safe-area-inset-bottom));
+    width: 3.5rem;
+    height: 3.5rem;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--fg);
+    color: var(--bg);
+    font-size: 1.75rem;
+    line-height: 3.5rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    z-index: 10;
+    transition: transform 0.2s ease;
+}
+
+.fab:hover {
+    background: var(--fg);
+    color: var(--bg);
+}
+
+body.sheet-open .fab {
+    transform: scale(0);
+}
+
+/* Bottom sheet */
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 20;
+}
+
+.backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: 32rem;
+    max-height: 92vh;
+    margin: 0 auto;
+    padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    transform: translateY(105%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 30;
+}
+
+.sheet.open {
+    transform: translateY(0);
+}
+
+.sheet.dragging {
+    transition: none;
+}
+
+.sheet-grip {
+    display: flex;
+    justify-content: center;
+    padding: 0.6rem 0 0.4rem;
+    cursor: grab;
+    touch-action: none;
+}
+
+.sheet-grip span {
+    width: 2.5rem;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+}
+
+.sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2rem;
+    margin-bottom: 0.75rem;
+}
+
+.sheet-head h2 {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: normal;
+}
+
+.sheet-head .icon-btn {
+    padding: 0.25rem 0.5rem;
+    border: none;
+    background: none;
+    color: var(--fg);
+}
+
+.sheet-head .icon-btn:hover {
+    background: none;
+    color: var(--fg);
+    opacity: 0.6;
+}
+
+.sheet .status {
+    margin: 0 0 1rem;
+}
+
+/* The two ways to add someone (sheet and empty list) */
+.choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    margin-bottom: 0.6rem;
+    padding: 0.9rem 1rem;
+    border-color: var(--border);
+    text-align: left;
+}
+
+.choice:hover {
+    background: var(--bg);
+    color: var(--fg);
+    border-color: var(--fg);
+}
+
+.choice .glyph {
+    width: 1.5rem;
+    font-size: 1.25rem;
+    line-height: 1.5rem;
+    text-align: center;
+}
+
+.choice strong {
+    display: block;
+    font-weight: normal;
+}
+
+.choice small {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+/* My code / Scan theirs */
+.segmented {
+    display: flex;
+    margin-bottom: 1rem;
+    border: 1px solid var(--fg);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.segmented button {
+    flex: 1;
+    padding: 0.45rem 0.5rem;
+    border: none;
+    border-radius: 0;
+    font-size: 0.9375rem;
+}
+
+.segmented button + button {
+    border-left: 1px solid var(--fg);
+}
+
+.segmented button[aria-pressed="true"] {
+    background: var(--fg);
+    color: var(--bg);
+}
+
+/* Same size in both tabs, so the sheet doesn't jump */
+.stage {
+    --side: min(74vw, 280px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stage-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--side);
+    height: var(--side);
+}
+
+.stage-box .stamp {
+    width: 100%;
     height: auto;
 }
 
-.scanner {
-    position: relative;
-    aspect-ratio: 1;
-    margin-bottom: 1rem;
+.stage .fingerprint,
+.stage .hint {
+    width: var(--side);
+    margin-top: 0.75rem;
+}
+
+.stage .hint {
+    padding: 0.5rem;
+    border: 1px dashed var(--border);
     border-radius: var(--radius);
+    color: var(--muted);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.cam {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
     overflow: hidden;
     background: #000;
 }
 
-.scanner video {
+.cam video {
     display: block;
     width: 100%;
     height: 100%;
@@ -527,11 +746,27 @@ input:disabled, textarea:disabled {
 }
 
 /* aiming frame */
-.scanner::after {
+.cam::after {
     content: '';
     position: absolute;
-    inset: 15%;
-    border: 2px solid rgba(255, 255, 255, 0.75);
-    border-radius: 0.5rem;
+    inset: 14%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
     pointer-events: none;
+}
+
+.cam .cam-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    color: #ddd;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sheet, .backdrop, .fab { transition: none; }
 }
