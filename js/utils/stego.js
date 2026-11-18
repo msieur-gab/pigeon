@@ -6,7 +6,7 @@
 import * as dither from './dither.js';
 import * as codec from './payload-codec.js';
 
-const CROP = 0.06;          // random crop per side, so no two images share pixels
+const CROP = 0.02;          // random crop per side (up to 2%), so no two images from one photo line up
 const QUALITY = 0.92;       // JPEG quality of the image Pigeon shares
 
 function loadImg(blob) {

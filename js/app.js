@@ -13,7 +13,7 @@ import * as addSheet from './add-sheet.js';
 import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-6';
+const APP_VERSION = '2026.11.18-7';
 
 // App state
 const state = {
@@ -451,6 +451,15 @@ function renderCreateInvite() {
     return `
         ${renderHeader('new invite', true)}
         <div class="card">
+            <canvas id="invite-canvas" class="hidden"></canvas>
+            <img id="invite-output" class="hidden output-image" alt="Encoded image">
+            ${renderCarrierChooser('invite')}
+            <input type="file" id="invite-image-input" accept="image/*">
+            <div class="actions hidden" id="invite-actions">
+                <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
+                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
+            </div>
+            ${renderSendTip()}
             <div class="field">
                 <label>contact name (for you)</label>
                 <input type="text" id="invite-name" placeholder="Alice">
@@ -460,16 +469,7 @@ function renderCreateInvite() {
                 <textarea id="invite-message">Hey! Use this to contact me securely...</textarea>
                 ${renderRoom('invite')}
             </div>
-            ${renderCarrierChooser('invite')}
-            <input type="file" id="invite-image-input" accept="image/*">
-            <canvas id="invite-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-invite-btn" onclick="window.app.generateInvite()">Generate invite image</button>
-            <img id="invite-output" class="hidden output-image" alt="Encoded image">
-            <div class="actions hidden" id="invite-actions">
-                <a id="invite-download" class="btn" download="pigeon-invite.jpg">Save</a>
-                <button class="btn" onclick="window.app.shareImage('pigeon-invite.jpg')">Share</button>
-            </div>
-            ${renderSendTip()}
         </div>
     `;
 }
@@ -485,22 +485,22 @@ function renderSendMessage() {
         <div class="card">
             <p class="text-muted text-small">${displayInfo}</p>
             <div class="fingerprint mb-1">${contact.fingerprint}</div>
-            <div class="field">
-                <label>message</label>
-                <textarea id="send-message" placeholder="Your message..."></textarea>
-                ${renderRoom('send')}
-            </div>
+            <canvas id="send-canvas" class="hidden"></canvas>
+            <img id="send-output" class="hidden output-image" alt="Encoded image">
             ${renderCarrierChooser('send')}
             <input type="file" id="send-image-input" accept="image/*">
-            <canvas id="send-canvas" class="hidden"></canvas>
-            <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
-            <img id="send-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="send-actions">
                 <button class="btn" id="send-edit" onclick="window.app.editMessage()">✎ Edit</button>
                 <a id="send-download" class="btn" download="pigeon-message.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-message.jpg')">Share</button>
             </div>
             ${renderSendTip()}
+            <div class="field">
+                <label>message</label>
+                <textarea id="send-message" placeholder="Your message..."></textarea>
+                ${renderRoom('send')}
+            </div>
+            <button class="btn btn-block hidden" id="generate-send-btn" onclick="window.app.generateMessage()">Generate message image</button>
         </div>
         <button class="btn btn-block btn-ghost text-muted" onclick="window.app.removeContact(this)">Remove contact</button>
     `;
@@ -525,21 +525,21 @@ function renderReceivedInvite() {
                 <label>save contact as</label>
                 <input type="text" id="accept-name" value="${esc(p.fromName)}" placeholder="Bob">
             </div>
-            <div class="field">
-                <label>reply message</label>
-                <textarea id="accept-reply" placeholder="Got your invite!"></textarea>
-                ${renderRoom('accept')}
-            </div>
+            <canvas id="accept-canvas" class="hidden"></canvas>
+            <img id="accept-output" class="hidden output-image" alt="Encoded image">
             ${renderCarrierChooser('accept')}
             <input type="file" id="accept-image-input" accept="image/*">
-            <canvas id="accept-canvas" class="hidden"></canvas>
-            <button class="btn btn-block hidden" id="generate-accept-btn" onclick="window.app.generateAccept()">Accept & generate reply</button>
-            <img id="accept-output" class="hidden output-image" alt="Encoded image">
             <div class="actions hidden" id="accept-actions">
                 <a id="accept-download" class="btn" download="pigeon-accept.jpg">Save</a>
                 <button class="btn" onclick="window.app.shareImage('pigeon-accept.jpg')">Share</button>
             </div>
             ${renderSendTip()}
+            <div class="field">
+                <label>reply message</label>
+                <textarea id="accept-reply" placeholder="Got your invite!"></textarea>
+                ${renderRoom('accept')}
+            </div>
+            <button class="btn btn-block hidden" id="generate-accept-btn" onclick="window.app.generateAccept()">Accept & generate reply</button>
         </div>
     `;
 }
@@ -740,12 +740,12 @@ function renderBackup() {
         <div class="card">
             <h2>soul bird</h2>
             <p class="mb-1">Create an image that contains your identity.</p>
+            <canvas id="backup-canvas" class="hidden"></canvas>
+            <img id="backup-output" class="hidden output-image" alt="Soul bird">
             ${renderCarrierChooser('backup')}
             ${renderRoom('backup')}
             <input type="file" id="backup-image-input" accept="image/*">
-            <canvas id="backup-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-backup-btn" onclick="window.app.generateBackup()">Generate soul bird</button>
-            <img id="backup-output" class="hidden output-image" alt="Soul bird">
             <a id="backup-download" class="btn btn-block hidden" download="soul-bird.jpg">Save soul bird</a>
             <div class="status info hidden" id="backup-tip">
                 Keep it private, like your recovery words: anyone with this picture can restore your identity. It can travel as a photo; cropping, editing or a screenshot erase what's inside.
@@ -920,7 +920,7 @@ function loadImageToCanvas(e, canvasId, btnId) {
 }
 
 // Prepare the carrier: 1280 px on its long side with a small random crop
-// (up to ~6% per side, so two images from the same photo never share the
+// (up to 2% per side, so two images from the same photo never share the
 // same pixels or block grid). The message goes into these pixels; the
 // visible canvas only shows a preview, fitted within 800x600.
 async function loadFileToCanvas(file, canvasId, btnId) {
