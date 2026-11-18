@@ -11,9 +11,10 @@ import * as decipher from './utils/decipher.js';
 import * as image from './utils/image.js';
 import * as qr from './utils/qr.js';
 import * as addSheet from './add-sheet.js';
+import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-3';
+const APP_VERSION = '2026.11.18-4';
 
 // App state
 const state = {
@@ -494,7 +495,7 @@ function renderSendMessage() {
             </div>
             ${renderSendTip()}
         </div>
-        <button class="btn btn-block btn-ghost text-muted" onclick="window.app.removeContact()">Remove contact</button>
+        <button class="btn btn-block btn-ghost text-muted" onclick="window.app.removeContact(this)">Remove contact</button>
     `;
 }
 
@@ -1298,13 +1299,15 @@ function takeMeetLink() {
     return met;
 }
 
-function removeContact() {
+// Their messages can't be opened until they're added again, so it takes two taps
+function removeContact(btn) {
     const c = state.currentContact;
     if (!c) return;
-    if (!confirm(`Remove ${c.name}? Their messages can't be opened until you add them again.`)) return;
-    contacts.remove(c.publicKey);
-    sync.scheduleSync(); // the backup on the server is replaced too
-    navigate('home', { currentContact: null });
+    tapTwice(btn, `Tap again to remove ${c.name}`, () => {
+        contacts.remove(c.publicKey);
+        sync.scheduleSync(); // the backup on the server is replaced too
+        navigate('home', { currentContact: null });
+    });
 }
 
 function rejectClaim() {

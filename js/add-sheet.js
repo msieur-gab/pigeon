@@ -9,6 +9,7 @@ import * as qr from './utils/qr.js';
 import * as crypto from './utils/crypto.js';
 import * as identity from './services/identity.js';
 import * as contacts from './services/contacts.js';
+import { tapTwice } from './utils/tap-twice.js';
 
 const view = { step: 'choose', tab: 'mine', met: null, note: '' };
 let stopCam = null;
@@ -127,7 +128,8 @@ function render() {
         if (add) add.onclick = addContact;
     } else if (view.step === 'invite') {
         body.innerHTML = renderInvite();
-        document.getElementById('invite-cancel').onclick = cancelInvite;
+        const btn = document.getElementById('invite-cancel');
+        btn.onclick = () => tapTwice(btn, 'Tap again to cancel', cancelInvite);
     }
 
     body.querySelectorAll('[data-close]').forEach(b => { b.onclick = close; });

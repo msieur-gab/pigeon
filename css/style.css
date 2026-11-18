@@ -769,3 +769,11 @@ body.sheet-open .fab {
 @media (prefers-reduced-motion: reduce) {
     .sheet, .backdrop, .fab { transition: none; }
 }
+
+/* First tap of a tap-twice button */
+.btn.armed,
+.btn.armed:hover {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+}
