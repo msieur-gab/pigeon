@@ -14,7 +14,7 @@ receive back with all three readers:
 
 - **Dither** (v2): five mid-frequency DCT values per textured 8×8 block set
   to a grid (strength: faint 62 / normal 50 / sturdy 40), parity = bit, soft
-  votes, Reed-Solomon check bytes (`lab/dither.js`, `lab/rs.js`; DMAS-style,
+  votes, Reed-Solomon check bytes (`js/utils/dither.js`, `js/utils/rs.js`, shared with the app; DMAS-style,
   written from scratch). Smooth areas never touched. Simulated: intact from
   quality 87 down to 50 on 15 photos (`docs/share-safe-research.md`, round 3).
 

@@ -22,7 +22,7 @@ Meanwhile, "secure" platforms still control what you say: they can delete conten
 Pigeon hides encrypted messages inside ordinary JPEG images. Send a bird photo through any channel — email, messaging apps, social media — and only the intended recipient can read what's inside.
 
 - **No new app required** — works over platforms you already use
-- **Rides any channel that sends files** — Telegram, WhatsApp, Signal (as a file/document) and email deliver the image untouched
+- **Share it like any photo** — the hidden message survives WhatsApp and Telegram compressing the picture (tested), and email or files carry it untouched
 - **Plausible deniability** — "It's just a photo" is an honest answer
 - **Keys never leave your device** — no server ever sees your messages
 
@@ -36,34 +36,32 @@ Pigeon hides encrypted messages inside ordinary JPEG images. Send a bird photo t
 
 | Layer | Purpose | Technology |
 |-------|---------|------------|
-| **Steganography** | Hide the payload | F5 algorithm in JPEG DCT coefficients |
+| **Steganography** | Hide the payload | Dither modulation in the picture's textured areas, with error correction |
 | **Encryption** | Protect the content | TweetNaCl (XSalsa20-Poly1305, Curve25519) |
 | **Cover traffic** | Blend in | Ordinary images over ordinary channels |
 
 The steganography provides **covertness** — the message is invisible.
 The encryption provides **security** — even if extracted, it's unreadable.
 
-### Send images as files, not photos
+### Share it like any photo
 
-The hidden message lives in the exact JPEG data. When a messaging app sends a picture *as a photo*, it re-encodes it and the message is erased — in our tests, even a single re-save at the same quality destroyed it. Sending it *as a file* keeps every byte:
+There is one way to send every Pigeon image: the Share button, or attach it as a normal photo in WhatsApp or Telegram. The message is hidden in the fine detail of the bird's textured areas (feathers, stone, leaves), never in smooth ones such as skies or blurred backgrounds, and each bit is written several times with error correction. It survives the apps re-encoding the picture:
 
-| App | How to send |
-|-----|-------------|
-| Telegram | 📎 → File |
-| WhatsApp | 📎 → Document |
-| Signal | 📎 → File |
-| Email | Attach the image |
+| App | Quality it re-encodes at (measured) | Message |
+|-----|------|---------|
+| WhatsApp | ≈ 69 | intact |
+| Telegram | ≈ 80 | intact |
 
-If an image arrives compressed, Pigeon says so (it reads the JPEG quality and typical app filenames) and suggests asking for it again as a file.
+Birds are 1280 px on their long side, a size both apps keep. Resizing, cropping, editing or a screenshot erases the message; if a picture arrives at another size, Pigeon says so. Signal hasn't been tested yet. The research and measurements are in [docs/share-safe-research.md](docs/share-safe-research.md).
 
 ### Your birds (carriers)
 
-Add your own photos in **⚙ settings → your birds**. When you write a message, Pigeon picks the bird used least recently and applies a small random crop, so the same photo never produces two images that can be laid over each other. Tap **↻ another bird** to change it, or **use another photo** to pick any image. Photos stay on your device. Your own, unpublished photos are best: a stock photo can be compared against its online original.
+Add your own photos in **⚙ settings → your birds**. When you write a message, Pigeon picks the bird used least recently and shows how many characters it can still carry as you type: busy photos hold more (often 300–1,000 characters), plain ones less. It applies a small random crop, so the same photo never produces two images that can be laid over each other. Tap **↻ another bird** to change it, or **use another photo** to pick any image. Photos stay on your device. Your own, unpublished photos are best: a stock photo can be compared against its online original.
 
 ### Opening images
 
 - **Android:** install Pigeon (browser menu → *Install app* / *Add to home screen*), then share a received image straight to Pigeon — it opens and decrypts automatically.
-- **Desktop Chrome:** after installing, Pigeon can be used to *Open with* on `.jpg` files. Drag & drop and paste also work.
+- **Desktop Chrome:** after installing, Pigeon can be used to *Open with* on `.jpg`, `.png` and `.webp` files. Drag & drop and paste also work.
 - **Everywhere:** tap **↓ open** and pick the file.
 
 ### Key Exchange
@@ -119,12 +117,12 @@ The cover story isn't decoration. It's operational security:
 **Stack:**
 - Vanilla JavaScript (no framework, no build step)
 - TweetNaCl for cryptography
-- F5stegojs for steganography
+- Dither modulation and Reed-Solomon error correction, written for Pigeon (`js/utils/dither.js`, `js/utils/rs.js`)
 - Minimal PHP backend (optional, only for encrypted sync)
 
 **Constraints:**
-- Payload capacity: ~1-2KB (depends on carrier image); payloads use a compact binary format (~100–180 bytes per message)
-- Images must travel as files: any re-encoding erases the message
+- Room per bird: ~150–1,150 bytes depending on its texture; payloads use a compact binary format (a 75-character message takes 121 bytes, an invite ~190)
+- The picture must keep its size: resizing, cropping or a screenshot erases the message (compression doesn't)
 - All processing happens client-side
 - Installable PWA, works offline after initial load (all libraries bundled, no CDN)
 
@@ -156,7 +154,7 @@ The sync API requires a PHP server with write access to `../data/users/` relativ
 
 Pigeon's approach is validated by peer-reviewed research:
 
-- **[TRIST: Circumventing Censorship with Transcoding-Resistant Image Steganography](https://www.usenix.org/conference/foci14/workshop-program/presentation/connolly)** (USENIX FOCI '14, SRI International) — Shows transcoding-resistant DCT embedding is possible with dedicated robust techniques. Pigeon's current F5 embedding is not transcoding-resistant; it relies on images being sent as files
+- **[TRIST: Circumventing Censorship with Transcoding-Resistant Image Steganography](https://www.usenix.org/conference/foci14/workshop-program/presentation/connolly)** (USENIX FOCI '14, SRI International) — Shows transcoding-resistant DCT embedding is possible with dedicated robust techniques. Pigeon now uses one of this family (dither modulation, see [docs/share-safe-research.md](docs/share-safe-research.md))
 
 - **[A Survey of Internet Censorship and its Measurement](https://arxiv.org/abs/2502.14945)** — Lists steganographic covert channels as viable censorship circumvention alongside Tor and traffic obfuscation
 

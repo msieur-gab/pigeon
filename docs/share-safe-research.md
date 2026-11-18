@@ -241,6 +241,9 @@ safety than needed, so fewer copies (fewer blocks touched) is the next lever.
 Both qualities are well above where faint breaks in simulation (below ~58),
 and Reed-Solomon had nothing to repair: there is margin left.
 
+(Since 18 Nov the engine lives in `js/utils/dither.js` and `js/utils/rs.js`, used by the app;
+`lab/dither.js` re-exports it, so the lab and the experiments run the same code.)
+
 ## Round 4: fewer copies, and Gab's own birds (18 Nov 2026)
 
 **Fewer copies doesn't help.** Lowering the floor of copies per bit from 7 to
