@@ -175,7 +175,9 @@ The pigeons are doing real work here.
 
 ## License
 
-MIT
+[PolyForm Noncommercial 1.0.0](LICENSE.md). You may read, run, study and audit the code, and change it for personal, research, educational or other noncommercial use. Any commercial use needs written permission from the author.
+
+Required Notice: Copyright 2026 Gabriel Baude (https://github.com/msieur-gab)
 
 ---
 
