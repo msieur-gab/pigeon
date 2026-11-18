@@ -37,3 +37,6 @@ node_modules/
 
 __pycache__/
 *.pyc
+# test photos (private, never in the public repo)
+*.zip
+birds/

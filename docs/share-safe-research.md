@@ -221,6 +221,48 @@ public shuffle seed, known header), as with F5's fixed key today. The content
 stays encrypted, but being *detected* may matter to people under censorship.
 A design question for when one method moves into the app.
 
+**First real sends (Gab, 18 Nov), dither faint (62), the default 75-character
+message, shared as a photo:**
+
+| App | Arrived as | JPEG quality | Dither |
+|---|---|---|---|
+| WhatsApp | 1280×736, 89 KB | ≈ 69 | intact, 7.7% of copies damaged, 0 bytes repaired |
+| Telegram | 1280×736, 101 KB | ≈ 80 | intact, 9.7% of copies damaged, 0 bytes repaired |
+| WhatsApp, 2nd bird (portrait, 7 copies per bit) | 720×1280, 270 KB | ≈ 69 | intact, 1.6%, 0 repaired |
+| Telegram, 2nd bird | 720×1280, 311 KB | ≈ 80 | intact, 1.1%, 0 repaired |
+| WhatsApp, 3rd bird (close-up on a plain blurred background, ~370 characters, 28 copies per bit) | 1280×1024, 76 KB | ≈ 69 | intact, 0.4%, 0 repaired |
+| Telegram, 3rd bird | 1280×1024, 90 KB | ≈ 80 | intact, 0.3%, 0 repaired |
+
+F5 and brightness unreadable in both. Neither app resized a 1280 px bird. The same qualities on two different birds suggest
+the apps use a fixed quality, not one per picture (three samples).
+On a picture with a plain background, the feathers alone held ~370 characters;
+the background is never touched. 28 copies per bit for 0.3% damage: far more
+safety than needed, so fewer copies (fewer blocks touched) is the next lever.
+Both qualities are well above where faint breaks in simulation (below ~58),
+and Reed-Solomon had nothing to repair: there is margin left.
+
+## Round 4: fewer copies, and Gab's own birds (18 Nov 2026)
+
+**Fewer copies doesn't help.** Lowering the floor of copies per bit from 7 to
+5, 4 or 3 (faint, 115 bytes = a 75-character message once encrypted) changed
+the number of copies on only 2 of 14 photos. On the others, the number is set
+by coverage: copies that fall in smooth blocks are skipped, so a bit needs
+enough copies for some to land in texture. A first try at choosing copies
+from a damage model (majority vote, 12% damaged copies) was too pessimistic
+and chose *more* copies; dropped. The lab keeps a `minCopies` option for tests.
+
+**Gab's set of 8 birds** (`birds-1-001.zip`, private, not in the repo: five
+camera photos up to 3840 px, three small ones of 320–960 px enlarged to 1280),
+faint (62), q87/80/75/69/66/62: **all intact**, both a 115-byte message and a
+message at 90% of the room. Room: 235–1,153 bytes, the small invite images
+included (235–425). Average change: 0.16–0.25 levels for a short message,
+up to ~1.1 for a full one on a busy photo.
+
+What makes the change smaller now is the message length, not the copies.
+A deeper idea, if ever needed: place copies only in textured blocks (fewer
+wasted, so fewer touched), which needs a placement the reader reproduces
+exactly. Not needed while Gab can't see the changes.
+
 ## Next round of tests (proposed)
 
 1. **Texture-only brightness in the lab page**, with the room shown per bird;

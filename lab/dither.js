@@ -32,7 +32,8 @@ const HEADER_BYTES = 5;                                // magic, copies, grid, l
 const HEADER_NSYM = 6;                                 // + RS check bytes (repairs 3)
 const HEADER_CODED = HEADER_BYTES + HEADER_NSYM;
 const HEADER_COPIES = 31;                              // fixed: the reader needs it before anything else
-const MIN_COPIES = 7;
+export const MIN_COPIES = 7;                           // default floor of copies per bit
+const READ_MIN = 3;                                    // the reader accepts headers down to this
 const NSYM = 16;                                       // RS check bytes per codeword (repairs 8)
 const CHUNK = 255 - NSYM;
 const SEED = 0x85ebca6b;
@@ -121,8 +122,8 @@ function lostShare(A) {
 
 const codedLength = len => { const body = len + 4; return body + Math.ceil(body / CHUNK) * NSYM; };
 
-function chooseCopies(nbits, lost, slots) {
-    for (let r = MIN_COPIES; r < 64; r++) {
+function chooseCopies(nbits, lost, slots, min = MIN_COPIES) {
+    for (let r = min; r < 64; r++) {
         // expected bits with every copy lost < 0.05; RS repairs the rare one
         if (nbits * Math.pow(lost, r) < 0.05 && HEADER_CODED * 8 * HEADER_COPIES + nbits * r <= slots) return r;
     }
@@ -130,19 +131,19 @@ function chooseCopies(nbits, lost, slots) {
 }
 
 /** Room for text, in bytes, in this picture (depends on its texture) */
-export function capacityFor(imageData) {
+export function capacityFor(imageData, { minCopies = MIN_COPIES } = {}) {
     const A = analyse(imageData);
     const lost = lostShare(A), slots = A.n * POS.length;
     let lo = 0, hi = 4000;
     while (lo < hi) {                                   // largest length that still fits
         const mid = (lo + hi + 1) >> 1;
-        if (chooseCopies(codedLength(mid) * 8, lost, slots)) lo = mid; else hi = mid - 1;
+        if (chooseCopies(codedLength(mid) * 8, lost, slots, minCopies)) lo = mid; else hi = mid - 1;
     }
     return lo;
 }
 
 /** Hide bytes in the picture (changes imageData in place) */
-export function embed(imageData, bytes, { grid = DEFAULT_GRID } = {}) {
+export function embed(imageData, bytes, { grid = DEFAULT_GRID, minCopies = MIN_COPIES } = {}) {
     const A = analyse(imageData);
     const STEPS = stepsFor(grid);
 
@@ -157,8 +158,8 @@ export function embed(imageData, bytes, { grid = DEFAULT_GRID } = {}) {
         coded.set(cw, o); o += cw.length;
     }
 
-    const r = chooseCopies(coded.length * 8, lostShare(A), A.n * POS.length);
-    if (!r) throw new Error(`Too long for this bird: ${bytes.length} bytes, room for ${capacityFor(imageData)}`);
+    const r = chooseCopies(coded.length * 8, lostShare(A), A.n * POS.length, minCopies);
+    if (!r) throw new Error(`Too long for this bird: ${bytes.length} bytes, room for ${capacityFor(imageData, { minCopies })}`);
 
     const head = rs.encode(new Uint8Array([MAGIC, r, grid, bytes.length >> 8, bytes.length & 255]), HEADER_NSYM);
     const bitAt = (arr, i) => (arr[i >> 3] >> (7 - (i & 7))) & 1;
@@ -250,7 +251,7 @@ export function extract(imageData) {
     if (!head) return { ok: false, rawErrors: rate(), reason: 'no hidden message found' };
     const r = head[1], grid = head[2], len = (head[3] << 8) | head[4];
     const n = codedLength(len);
-    if (r < MIN_COPIES || HEADER_CODED * 8 * HEADER_COPIES + n * 8 * r > A.n * POS.length) {
+    if (r < READ_MIN || HEADER_CODED * 8 * HEADER_COPIES + n * 8 * r > A.n * POS.length) {
         return { ok: false, rawErrors: rate(), reason: 'damaged (bad header)' };
     }
     const coded = readBytes(n, r);
