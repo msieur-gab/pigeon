@@ -126,6 +126,46 @@ protected by encryption.
    bits per image and needs a shared image collection. Not practical for
    messages.
 
+## Round 2: dither modulation vs brightness (18 Nov 2026)
+
+`lab/experiments/05_dither_vs_brightness.py` (Python only, not yet in the lab
+page). Both methods hide only in textured blocks (Y std ≥ 3, same threshold
+for writer and reader) and are compared on Gab's seven birds at 1280 px with a
+120-character message, re-encoded at quality 87, 62 and 55.
+
+**Dither modulation**: in each textured block, five mid-frequency DCT
+coefficients of Y — (0,2), (1,1), (2,0), (1,2), (2,1) — are each set to the
+nearest multiple of the quality-62 quantization step whose parity is the bit
+(the change is added equally to R, G, B). Re-encoding at quality 62 or better
+keeps the value on that grid. At least 9 copies per bit, majority vote.
+
+| Bird | Brightness room | Dither room | Dither q87 / q62 / q55 |
+|---|---|---|---|
+| Blurred close-up | ~70 | ~375 | OK / OK / broken |
+| Yellow pair | ~95 | ~470 | OK / OK / OK |
+| Portrait | ~60 | ~320 | OK / OK / broken |
+| Small (upscaled) | ~60 | ~310 | OK / OK / broken |
+| Wall with moss | ~560 | ~980 | OK / OK / broken |
+| Rust + pavement | ~330 | ~980 | OK / OK / broken |
+| Flight, yellow wall | ~180 | ~980 | OK / OK / broken |
+
+(Dither room is capped at ~980 by the test's search range.)
+
+- **Room:** dither holds 3–6× more on smooth birds.
+- **Looks:** average change 0.2–0.26 levels for dither vs 0.4–0.7 for
+  brightness. In crops, dither is indistinguishable from the original; smooth
+  backgrounds are untouched.
+- **Survival:** dither is matched to quality 62. It survives 62 and above
+  (Telegram-like 87 included) on all seven birds, and breaks below (55).
+  Brightness also survives 55, but holds far less.
+- **Lessons:** writer and reader must use the *same* texture threshold
+  (blocks read but never written add random votes; that caused most early
+  failures). Dither copies flip more often than brightness (~2% vs 0.1%), so
+  they need more copies (or Reed-Solomon). Don't gate votes on "close to the
+  grid": at quality 87 written values land slightly off the q62 grid.
+- **Open risk:** if WhatsApp's real quality is below 62, dither must be
+  matched lower (bigger, more visible changes). Measure the real apps first.
+
 ## Next round of tests (proposed)
 
 1. **Texture-only brightness in the lab page**, with the room shown per bird;
@@ -136,9 +176,9 @@ protected by encryption.
    the room on smooth birds (~140–190 chars on the blurred close-up).
 3. **Add Reed-Solomon** instead of plain repetition (more room for the same
    safety; would have fixed the rust case).
-4. **Prototype mid-frequency AC dither modulation** (research item 1) and
-   compare with texture-only brightness on the same birds: room, visibility,
-   survival at q87 and q62.
+4. ~~Prototype mid-frequency AC dither modulation~~ done (round 2): it wins.
+   Next: port it to the lab page (`lab/dither.js`), real Telegram and
+   WhatsApp sends, Gab judges by eye.
 5. **Real-app quality check**: measure the actual JPEG quality and size
    Telegram and WhatsApp deliver (the lab's checker prints both), to tune the
    margin.
