@@ -69,8 +69,10 @@ Add your own photos in **⚙ settings → your birds**. When you write a message
 ### Key Exchange
 
 **In person:**
-- Scan QR codes to exchange public keys
-- Verify fingerprints (human-readable 3-word phrases like "castle-river-forest")
+- Tap **▦ meet**: your code appears as a stamp. Each of you taps **Scan their code** and points at the other's screen — two scans and you have each other
+- Both screens show the three words of the person scanned (like "castle-river-forest"): check they match
+- The code is also a link, so a phone camera can scan it: someone without Pigeon lands on the app and adds you once they've created an identity
+- A contact met this way has no picture yet; the first bird they send becomes their stamp
 
 **Remote:**
 1. **Invite** — Generate a temporary key, embed it in an image, send via any channel

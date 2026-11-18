@@ -98,8 +98,10 @@ function cancellation(size, id, p, { label, words }) {
  * @param {string} [opts.label] - date in the postmark circle, e.g. "17 NOV"
  * @param {string[]} [opts.words] - the sender's three fingerprint words
  * @param {number} [opts.rotation] - degrees; a slight tilt looks hand-placed
+ * @param {boolean} [opts.contain] - show the whole picture instead of filling
+ *   the frame (for a QR code, which must not be cropped)
  */
-export function render(size, src, { marked = false, label = '', words = [], rotation = 0 } = {}) {
+export function render(size, src, { marked = false, label = '', words = [], rotation = 0, contain = false } = {}) {
     const p = PRESETS[size] || PRESETS[64];
     const id = `stamp${++uid}`;
     const m = p.margin;
@@ -108,7 +110,7 @@ export function render(size, src, { marked = false, label = '', words = [], rota
     const safeSrc = String(src || '').replace(/"/g, '%22');
 
     const picture = src
-        ? `<image x="${m}" y="${m}" width="${imgW}" height="${imgH}" href="${safeSrc}" preserveAspectRatio="xMidYMid slice"/>`
+        ? `<image x="${m}" y="${m}" width="${imgW}" height="${imgH}" href="${safeSrc}" preserveAspectRatio="xMidYMid ${contain ? 'meet' : 'slice'}"/>`
         : `<rect x="${m}" y="${m}" width="${imgW}" height="${imgH}" fill="#e6e4dc"/>
            <text x="${size / 2}" y="${m + imgH / 2}" text-anchor="middle" dominant-baseline="central"
                  font-family="${MONO}" font-size="${imgW * 0.35}" fill="#9a978c">?</text>`;

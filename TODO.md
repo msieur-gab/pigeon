@@ -37,6 +37,12 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [ ] Hosting: GitHub Pages can't run PHP; the API needs a PHP host (e.g. OVH shared hosting)
 - [ ] Lower priority: API logging, optional server-side backup versions, a short note explaining the security model to users
 
+## Meet in person (QR)
+
+- [ ] **iPhone**: test scanning with the in-app camera (uses jsQR there) and with the iPhone camera (opens Safari, which doesn't share storage with the installed app)
+- [ ] **Android**: check whether scanning with the phone camera opens the installed app or a browser tab
+- [ ] One-sided camera: if only one phone can scan, the other still needs an invite to reach them. Option: after scanning, send a first image that carries your key
+
 ## Design & experience
 
 - [ ] **Stamp**: check the sender's words stay readable on dark photos
@@ -74,4 +80,5 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] Stamps: received birds, contacts and your avatar; postmark with date and the sender's three words
 - [x] Message reveal with deciphering effect (revertible: `ENABLED` flag)
 - [x] Version shown in Settings
+- [x] Meet in person: QR code on a stamp, in-app scanner (native on Android, jsQR elsewhere), camera link with `#meet=`
 - [x] Pictures stored as small JPEG (contacts 96 px, your avatar 192 px): ~2–5 KB each instead of ~40 KB, so the backup fits a few hundred contacts (WebP left out: Safari can't create it)

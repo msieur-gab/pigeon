@@ -497,3 +497,41 @@ input:disabled, textarea:disabled {
     from { opacity: 0; transform: translateY(-0.5rem); }
     to { opacity: 1; transform: none; }
 }
+
+/* Meet in person */
+.meet-code {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem 0 1rem;
+}
+
+.meet-code .stamp {
+    width: min(78vw, 300px);
+    height: auto;
+}
+
+.scanner {
+    position: relative;
+    aspect-ratio: 1;
+    margin-bottom: 1rem;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+}
+
+.scanner video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* aiming frame */
+.scanner::after {
+    content: '';
+    position: absolute;
+    inset: 15%;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    border-radius: 0.5rem;
+    pointer-events: none;
+}
