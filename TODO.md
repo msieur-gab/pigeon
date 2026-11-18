@@ -99,3 +99,6 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] Room shown while typing ("N characters left in this bird"); too long is refused before anything is saved
 - [x] Invites and replies save the pending invite or contact only once the bird carries the message
 - [x] Signal tested (18 Nov 2026): a bird shared as a photo arrives at q≈75, same size, message intact
+- [x] 📷 Take a photo on the carrier screens (phones only): the photo is used for that image only, never added to the flock (Gab, 18 Nov: "a one-use one")
+- [x] An invite or reply opened twice says who is already in the contacts and offers to write to them
+- [x] Every bird is a 4:3 postcard, 1280×960, filled (taller photos cropped a little above the middle); preview and result the same size

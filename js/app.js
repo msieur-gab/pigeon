@@ -13,7 +13,7 @@ import * as addSheet from './add-sheet.js';
 import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-9';
+const APP_VERSION = '2026.11.18-10';
 
 // App state
 const state = {
@@ -604,11 +604,18 @@ function renderArrivalStamp() {
 
 // Carrier controls: Pigeon picks a bird from the flock; the user can ask
 // for another one or choose any photo instead.
+// On a phone, a photo can also be taken on the spot: used for this image
+// only, never added to the flock (add photos there from the library).
+const CAN_TAKE_PHOTO = window.matchMedia?.('(pointer: coarse)').matches;
+
 function renderCarrierChooser(prefix) {
+    const camera = CAN_TAKE_PHOTO ? `
+            <button class="btn" id="${prefix}-camera-btn" onclick="document.getElementById('${prefix}-camera-input').click()">📷 Take a photo</button>
+            <input type="file" id="${prefix}-camera-input" accept="image/*" capture="environment">` : '';
     return `
         <div class="actions mb-1" id="${prefix}-chooser">
             <button class="btn hidden" id="${prefix}-another-bird" onclick="window.app.anotherBird()">↻ another bird</button>
-            <button class="btn" id="${prefix}-choose-btn" onclick="document.getElementById('${prefix}-image-input').click()">Choose carrier image</button>
+            <button class="btn" id="${prefix}-choose-btn" onclick="document.getElementById('${prefix}-image-input').click()">Choose carrier image</button>${camera}
         </div>
         <p class="text-muted text-small mb-1 hidden" id="${prefix}-flock-hint">Tip: add your own bird photos in ⚙ settings and Pigeon will pick one for you.</p>
     `;
@@ -806,6 +813,10 @@ function attachScreenListeners() {
         { input: 'send-image-input', canvas: 'send-canvas', btn: 'generate-send-btn' },
         { input: 'accept-image-input', canvas: 'accept-canvas', btn: 'generate-accept-btn' },
         { input: 'backup-image-input', canvas: 'backup-canvas', btn: 'generate-backup-btn' },
+        { input: 'invite-camera-input', canvas: 'invite-canvas', btn: 'generate-invite-btn' },
+        { input: 'send-camera-input', canvas: 'send-canvas', btn: 'generate-send-btn' },
+        { input: 'accept-camera-input', canvas: 'accept-canvas', btn: 'generate-accept-btn' },
+        { input: 'backup-camera-input', canvas: 'backup-canvas', btn: 'generate-backup-btn' },
         { input: 'open-image-input', handler: handleOpenImage },
         { input: 'restore-image-input', handler: handleRestoreImage },
         { input: 'avatar-input', handler: handleAvatarChange },
@@ -982,7 +993,15 @@ async function openImageFile(file) {
         const parsed = messages.parse(payload);
 
         if (parsed.type === 'duplicate') {
-            showOpenStatus(`<div class="status info">You've already opened this image.</div>`);
+            // An invite or a reply already used: if it brought a contact, say
+            // so and offer to write to them
+            const contact = payload.from ? contacts.getByPublicKey(payload.from) : null;
+            showOpenStatus(contact
+                ? `<div class="status info">
+                    <p>You've already opened this image: <strong>${esc(contact.name)}</strong> is in your contacts.</p>
+                    <button class="btn btn-block mt-1" onclick="window.app.selectContact('${esc(contact.publicKey)}')">Write to ${esc(contact.name)}</button>
+                </div>`
+                : `<div class="status info">You've already opened this image.</div>`);
             return;
         }
 
