@@ -20,12 +20,14 @@ function loadImg(blob) {
 }
 
 /**
- * Prepare a carrier from a photo: 1280 px on its long side, slightly cropped.
+ * Prepare a carrier from a photo: a landscape postcard (4:3 to 16:9; portrait,
+ * square and panorama photos are cropped a little above the middle), 1280 px on
+ * its long side, slightly cropped at random.
  * @param {Blob|File} blob
  * @returns {Promise<{cover: ImageData, room: number}>} room: bytes it can hide
  */
 export async function prepareCarrier(blob) {
-    const cover = dither.prepareCover(await loadImg(blob), { crop: CROP });
+    const cover = dither.prepareCover(await loadImg(blob), { crop: CROP, postcard: true });
     return { cover, room: dither.capacityFor(cover) };
 }
 

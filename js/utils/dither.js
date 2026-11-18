@@ -47,19 +47,43 @@ function crc32(bytes) {
     return ~c >>> 0;
 }
 
+// Postcard shapes: every bird is a landscape between 4:3 and 16:9
+export const MIN_RATIO = 4 / 3, MAX_RATIO = 16 / 9;
+
+// Where the postcard crop goes. A first version picked the busiest window
+// (most texture, so most room), but on real photos texture is not the
+// subject: it cut a pigeon's head to keep its plumage and a ledge, and kept
+// autumn leaves instead of the dog lying on them. The crop now sits where
+// photographers put the subject: centred 45% down a portrait (a little above
+// the middle, rule of thirds), in the middle of a panorama.
+function postcardWindow(W, H, winW, winH) {
+    if (winH < H) return { x: 0, y: Math.min(H - winH, Math.max(0, 0.45 * H - winH / 2)), w: winW, h: winH };
+    return { x: (W - winW) / 2, y: 0, w: winW, h: winH };
+}
+
 /**
  * The cover for a bird: drawn at 1280 px on its long side, sides rounded down
  * to multiples of 16 so the 8x8 JPEG blocks line up, after an optional random
  * crop of up to `crop` per side (two images from the same photo then never
- * share the same pixels).
+ * share the same pixels). With `postcard`, a photo outside the landscape
+ * shapes 4:3 to 16:9 (portrait, square, panorama) is first cropped to the
+ * nearest of the two, a little above the middle (see postcardWindow).
  * @param {HTMLImageElement|ImageBitmap} img
  * @returns {ImageData}
  */
-export function prepareCover(img, { crop = 0 } = {}) {
-    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+export function prepareCover(img, { crop = 0, postcard = false } = {}) {
+    let W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    let ox = 0, oy = 0;
+    if (postcard) {
+        const r = W / H;
+        let win = null;
+        if (r < MIN_RATIO) win = postcardWindow(W, H, W, W / MIN_RATIO);
+        else if (r > MAX_RATIO) win = postcardWindow(W, H, H * MAX_RATIO, H);
+        if (win) { ox = win.x; oy = win.y; W = win.w; H = win.h; }
+    }
     const cut = size => Math.floor(Math.random() * size * crop);
-    const sx = cut(W), sy = cut(H);
-    const sw = W - sx - cut(W), sh = H - sy - cut(H);
+    const sx = ox + cut(W), sy = oy + cut(H);
+    const sw = W - (sx - ox) - cut(W), sh = H - (sy - oy) - cut(H);
     const scale = LONG_SIDE / Math.max(sw, sh);
     const w = Math.max(16, Math.floor(sw * scale / 16) * 16);
     const h = Math.max(16, Math.floor(sh * scale / 16) * 16);
