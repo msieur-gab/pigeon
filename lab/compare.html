@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pigeon lab · original vs dither</title>
+    <style>
+        :root { --bg: #f4f4f2; --fg: #1d1d1b; --muted: #6b6b66; --border: #cfcfca; --radius: 6px; }
+        @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1a; --fg: #ececea; --muted: #9a9a94; --border: #3a3a37; } }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+        header { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
+        h1 { font-size: 1rem; font-weight: 600; margin: 0 0.5rem 0 0; }
+        .btn { font: inherit; padding: 0.35rem 0.8rem; border: 1px solid var(--fg); border-radius: var(--radius); background: transparent; color: var(--fg); cursor: pointer; }
+        .btn:disabled { opacity: 0.4; cursor: default; }
+        textarea { font: inherit; flex: 1; min-width: 16rem; height: 2.2rem; resize: vertical; padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; color: var(--fg); }
+        .info { font-size: 0.8125rem; color: var(--muted); padding: 0.3rem 1rem; min-height: 1.6rem; }
+        main { padding: 0 1rem 1rem; }
+        #compare { --cmp-bg: #808080; }
+        .cmp-panes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .cmp-panes figure { margin: 0; min-width: 0; }
+        .cmp-panes figcaption { font-size: 0.8125rem; color: var(--muted); margin-bottom: 3px; }
+        .cmp-panes canvas { display: block; width: 100%; height: calc(100vh - 11.5rem); touch-action: none; border: 1px solid var(--border); border-radius: var(--radius); cursor: grab; }
+        .row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+        .mono-small { font-size: 0.75rem; color: var(--muted); }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>original vs dither</h1>
+    <button class="btn" id="pick">Choose a bird</button>
+    <input type="file" id="pick-input" accept="image/*">
+    <textarea id="msg" aria-label="message">Meet me at the old bridge at seven. Bring the blue notebook and come alone.</textarea>
+    <button class="btn" id="make" disabled>Hide it</button>
+</header>
+<p class="info" id="info">Choose a bird, then Hide it. Wheel to zoom, drag to move, double-click for 1:1; both sides follow.</p>
+<main><div id="compare"></div></main>
+
+<script type="module">
+    import { prepareCover } from './brightness.js';
+    import * as dm from './dither.js';
+    import { createCompare } from './compare.js';
+
+    const GRID = 62;            // faint: the strength chosen after the real sends
+    const QUALITY = 0.92;       // what Pigeon shares
+    const $ = id => document.getElementById(id);
+    const view = createCompare($('compare'));
+    let cover = null, name = '';
+
+    const toCanvas = d => { const c = document.createElement('canvas'); c.width = d.width; c.height = d.height; c.getContext('2d').putImageData(d, 0, 0); return c; };
+    const toBlob = d => new Promise(r => toCanvas(d).toBlob(r, 'image/jpeg', QUALITY));
+    const loadImg = f => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Not an image')); i.src = URL.createObjectURL(f); });
+
+    function room() {
+        if (!cover) return;
+        const used = new TextEncoder().encode($('msg').value).length;
+        $('info').textContent = `${name} → ${cover.width}×${cover.height} · message ${used} bytes · room ${dm.capacityFor(cover)} bytes`;
+    }
+    $('pick').onclick = () => $('pick-input').click();
+    $('pick-input').onchange = async e => {
+        const f = e.target.files[0];
+        if (!f) return;
+        try {
+            cover = prepareCover(await loadImg(f));
+            name = f.name;
+            $('make').disabled = false;
+            room();
+            await make();
+        } catch (err) { $('info').textContent = err.message; }
+        e.target.value = '';
+    };
+    $('msg').oninput = room;
+    $('make').onclick = make;
+
+    async function make() {
+        if (!cover) return;
+        $('make').disabled = true;
+        try {
+            // Original: the bird exactly as Pigeon would send it with no message
+            const plain = await toBlob(cover);
+            const c = new ImageData(new Uint8ClampedArray(cover.data), cover.width, cover.height);
+            const info = dm.embed(c, new TextEncoder().encode($('msg').value), { grid: GRID });
+            const hidden = await toBlob(c);
+            await view.set(0, plain, 'original (as sent, no message)');
+            await view.set(1, hidden, `dither, faint (${GRID}) · ${Math.round(info.touched * 100)}% of 8×8 squares touched · ${info.copies} copies per bit`);
+            room();
+        } catch (err) {
+            $('info').textContent = err.message;
+        } finally {
+            $('make').disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
