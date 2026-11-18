@@ -28,6 +28,13 @@ Looks: identical in textured areas (feathers). In smooth, blurred
 backgrounds a ±6 nudge left visible pale specks; ±3 is much fainter. ±2 is
 invisible but breaks at quality 62.
 
+Real send (Gab, Telegram, own account): brightness survived, but the changes
+were visible as glitch-like specks. Measured floor: WhatsApp-level JPEG rounds
+each block's brightness to steps of ~1.5 levels, so a nudge below ±3 is erased
+in every kind of area, smooth or textured. Fix 1 (done): touch only the blocks
+the message needs (75 characters: about 16% of blocks instead of all).
+Fix 2 (proposed): never touch smooth blocks, hide only in textured ones.
+
 ## Next
 
 1. Real send of both images through Telegram and WhatsApp with the normal

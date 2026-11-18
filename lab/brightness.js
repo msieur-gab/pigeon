@@ -2,7 +2,9 @@
 // brightness is nudged onto an even or odd step of a 6-level grid. JPEG
 // re-encoding barely moves block averages, so the bits survive the
 // compression of messaging apps. Each bit is written 5 times in blocks
-// spread over the image; reading takes the majority.
+// spread over the image; reading takes the majority. Only as many blocks as
+// the message needs are touched: a short message leaves most of the picture
+// untouched.
 //
 // Same idea as Phasm's "Fortress" mode (written from scratch here).
 
@@ -84,8 +86,8 @@ export function embed(imageData, bytes) {
         throw new Error(`Too long: ${bytes.length} bytes, room for ${L.capacity - 7}`);
     }
 
-    // frame: magic, length (2), bytes, crc32 (4), zero padding
-    const frame = new Uint8Array(L.capacity);
+    // frame: magic, length (2), bytes, crc32 (4)
+    const frame = new Uint8Array(bytes.length + 7);
     frame[0] = MAGIC;
     frame[1] = bytes.length >> 8;
     frame[2] = bytes.length & 0xff;
@@ -93,9 +95,11 @@ export function embed(imageData, bytes) {
     const crc = crc32(bytes);
     frame.set([crc >>> 24, (crc >>> 16) & 0xff, (crc >>> 8) & 0xff, crc & 0xff], 3 + bytes.length);
 
-    const nbits = L.capacity * 8;
+    // copy k of bit i sits in block perm[i * REPEAT + k]: the header comes
+    // first, so a reader can find the length before reading the rest
+    const nbits = frame.length * 8;
     for (let s = 0; s < nbits * REPEAT; s++) {
-        const i = s % nbits;
+        const i = (s / REPEAT) | 0;
         const bit = (frame[i >> 3] >> (7 - (i & 7))) & 1;
         const block = L.perm[s];
         const bx = block % L.bw, by = (block / L.bw) | 0;
@@ -133,39 +137,38 @@ export function embed(imageData, bytes) {
 export function extract(imageData) {
     const { width, height, data } = imageData;
     const L = layout(width, height);
-    const nbits = L.capacity * 8;
-    const votes = new Int32Array(nbits);
+    let reads = 0, disagree = 0;
 
-    const reads = new Uint8Array(nbits * REPEAT);
-    for (let s = 0; s < nbits * REPEAT; s++) {
-        const block = L.perm[s];
-        const m = blockMean(data, width, block % L.bw, (block / L.bw) | 0);
-        const bit = Math.round(m / (STEP / 2)) & 1;
-        reads[s] = bit;
-        votes[s % nbits] += bit;
+    // majority vote for bytes [from, to)
+    function readBytes(from, to) {
+        const out = new Uint8Array(to - from);
+        for (let i = from * 8; i < to * 8; i++) {
+            const bits = [];
+            for (let k = 0; k < REPEAT; k++) {
+                const block = L.perm[i * REPEAT + k];
+                const m = blockMean(data, width, block % L.bw, (block / L.bw) | 0);
+                bits.push(Math.round(m / (STEP / 2)) & 1);
+            }
+            const ones = bits.reduce((x, y) => x + y, 0);
+            const bit = ones * 2 > REPEAT ? 1 : 0;
+            reads += REPEAT;
+            disagree += bit ? REPEAT - ones : ones;
+            if (bit) out[(i >> 3) - from] |= 1 << (7 - (i & 7));
+        }
+        return out;
     }
 
-    const frame = new Uint8Array(L.capacity);
-    let disagree = 0;
-    for (let i = 0; i < nbits; i++) {
-        const bit = votes[i] * 2 > REPEAT ? 1 : 0;
-        if (bit) frame[i >> 3] |= 1 << (7 - (i & 7));
-    }
-    for (let s = 0; s < nbits * REPEAT; s++) {
-        const i = s % nbits;
-        const majority = (frame[i >> 3] >> (7 - (i & 7))) & 1;
-        if (reads[s] !== majority) disagree++;
-    }
-    const rawErrors = disagree / (nbits * REPEAT);
-
-    if (frame[0] !== MAGIC) return { ok: false, rawErrors, reason: 'no hidden message found' };
-    const len = (frame[1] << 8) | frame[2];
-    if (len + 7 > L.capacity) return { ok: false, rawErrors, reason: 'damaged (bad length)' };
-    const bytes = frame.slice(3, 3 + len);
-    const c = frame.slice(3 + len, 7 + len);
+    const head = readBytes(0, 3);
+    const rate = () => (reads ? disagree / reads : 0);
+    if (head[0] !== MAGIC) return { ok: false, rawErrors: rate(), reason: 'no hidden message found' };
+    const len = (head[1] << 8) | head[2];
+    if (len + 7 > L.capacity) return { ok: false, rawErrors: rate(), reason: 'damaged (bad length)' };
+    const rest = readBytes(3, 7 + len);
+    const bytes = rest.slice(0, len);
+    const c = rest.slice(len, len + 4);
     const crc = ((c[0] << 24) | (c[1] << 16) | (c[2] << 8) | c[3]) >>> 0;
-    if (crc !== crc32(bytes)) return { ok: false, rawErrors, reason: 'damaged (check failed)' };
-    return { ok: true, bytes, rawErrors };
+    if (crc !== crc32(bytes)) return { ok: false, rawErrors: rate(), reason: 'damaged (check failed)' };
+    return { ok: true, bytes, rawErrors: rate(), blocksUsed: (7 + len) * 8 * REPEAT, blocks: L.blocks };
 }
 
 export { crc32 };

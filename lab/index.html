@@ -188,7 +188,9 @@
                 $(`save-${k}`).href = out[k].url;
             }
             $('cap-f5').textContent = `F5 (today) · ${(f5Blob.size / 1024).toFixed(0)} KB · breaks if sent as a photo`;
-            $('cap-br').textContent = `Brightness · ${(brBlob.size / 1024).toFixed(0)} KB · should survive`;
+            const used = (enc.encode(text).length + 7) * 8 * 5;
+            const total = (cover.width >> 3) * (cover.height >> 3);
+            $('cap-br').textContent = `Brightness · ${(brBlob.size / 1024).toFixed(0)} KB · ${Math.round(used / total * 100)}% of blocks touched · should survive`;
             $('diff').checked = false;
             $('made').classList.remove('hidden');
         } catch (err) {
