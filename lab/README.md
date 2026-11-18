@@ -1,5 +1,7 @@
 # Lab: share-safe test
 
+Full write-up, research and next tests: `docs/share-safe-research.md`.
+
 `lab/index.html` makes the same bird two ways at 1280 px and checks images
 you receive back:
 
