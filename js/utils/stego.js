@@ -20,9 +20,9 @@ function loadImg(blob) {
 }
 
 /**
- * Prepare a carrier from a photo: a landscape postcard (4:3 to 16:9; portrait,
- * square and panorama photos are cropped a little above the middle), 1280 px on
- * its long side, slightly cropped at random.
+ * Prepare a carrier from a photo: a 4:3 postcard, 1280 x 960 (taller photos
+ * cropped a little above the middle, wider ones in the middle), slightly
+ * cropped at random.
  * @param {Blob|File} blob
  * @returns {Promise<{cover: ImageData, room: number}>} room: bytes it can hide
  */

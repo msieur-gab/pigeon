@@ -13,7 +13,7 @@ import * as addSheet from './add-sheet.js';
 import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-8';
+const APP_VERSION = '2026.11.18-9';
 
 // App state
 const state = {
@@ -919,8 +919,8 @@ function loadImageToCanvas(e, canvasId, btnId) {
     loadFileToCanvas(file, canvasId, btnId);
 }
 
-// Prepare the carrier: a landscape postcard (portrait photos cropped at
-// a little above the middle), 1280 px on its long side, with a small random crop
+// Prepare the carrier: a 4:3 postcard, 1280 x 960 (taller photos cropped a
+// little above the middle, wider ones in the middle), with a small random crop
 // (up to 2% per side, so two images from the same photo never share the
 // same pixels or block grid). The message goes into these pixels; the
 // visible canvas only shows a preview, fitted within 800x600.
