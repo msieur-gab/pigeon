@@ -286,6 +286,22 @@ real chain (or that plain, enlarged bird) is harsher than the simulation.
 Decision (Gab): keep faint; a bird passed from one app to another is not a
 case to design for, "people are always using the same communication app".
 
+## Two-party test and Signal (18 Nov 2026)
+
+Gab's phone and Claude's local test identity exchanged pictures made by the
+app (version 2026.11.18-5 to -7):
+
+| Picture | Route | Arrived | Result |
+|---|---|---|---|
+| invite | phone → Telegram → computer | 1280×960, q≈87 | intact, 1.1% damaged |
+| accept | computer → Telegram → phone | | confirmed on the phone |
+| message 3 | phone → Telegram → computer | 720×1280, q≈87 | intact, 0.3% |
+| message 5 (~637 characters) | phone → WhatsApp → email → computer | 720×1280, q≈69 | intact, 1.4% |
+| message 6 | phone → **Signal** → email → computer | 1280×720, q≈75 | intact, 6.4% |
+| message 2 | phone → WhatsApp → Telegram → computer (twice) | 704×1280, q≈87 | lost (see round 5) |
+
+Nothing needed repair in any picture that survived.
+
 ## Next round of tests (proposed)
 
 1. **Texture-only brightness in the lab page**, with the room shown per bird;

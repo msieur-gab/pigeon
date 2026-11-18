@@ -56,7 +56,6 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [ ] **Telegram style** for messages (February idea: STOP between sentences, dimmed) — not started
 - [ ] **Deciphering effect**: confirm the pace on the phone (now ~2 s; `MIN_MS` in `js/utils/decipher.js`)
 - [ ] **iPhone flow**: no share-sheet entry on iOS; check opening from Photos and Files
-- [ ] **Signal**: test that a bird shared as a photo survives (only WhatsApp and Telegram are tested)
 - [ ] **Forwarding inside one app**: check that a WhatsApp or Telegram forward keeps the bird readable (simulated: compressed twice in the same app survives)
 - [ ] **Small, plain birds** hold little (a small photo enlarged to 1280 px: ~210 bytes, the text cut short). Options: the flock skips birds with little room when picking; warn when adding a small photo
 
@@ -99,3 +98,4 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] **One way to send everything** (18 Nov 2026): messages hidden with dither modulation and Reed-Solomon in the bird's textured areas, survive WhatsApp (q≈69) and Telegram (q≈80) sending it as a photo; real sends on three birds, no repair needed (`docs/share-safe-research.md`)
 - [x] Room shown while typing ("N characters left in this bird"); too long is refused before anything is saved
 - [x] Invites and replies save the pending invite or contact only once the bird carries the message
+- [x] Signal tested (18 Nov 2026): a bird shared as a photo arrives at q≈75, same size, message intact

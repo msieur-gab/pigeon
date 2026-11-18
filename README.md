@@ -22,7 +22,7 @@ Meanwhile, "secure" platforms still control what you say: they can delete conten
 Pigeon hides encrypted messages inside ordinary JPEG images. Send a bird photo through any channel — email, messaging apps, social media — and only the intended recipient can read what's inside.
 
 - **No new app required** — works over platforms you already use
-- **Share it like any photo** — the hidden message survives WhatsApp and Telegram compressing the picture (tested), and email or files carry it untouched
+- **Share it like any photo** — the hidden message survives WhatsApp, Telegram and Signal compressing the picture (tested), and email or files carry it untouched
 - **Plausible deniability** — "It's just a photo" is an honest answer
 - **Keys never leave your device** — no server ever sees your messages
 
@@ -45,14 +45,15 @@ The encryption provides **security** — even if extracted, it's unreadable.
 
 ### Share it like any photo
 
-There is one way to send every Pigeon image: the Share button, or attach it as a normal photo in WhatsApp or Telegram. The message is hidden in the fine detail of the bird's textured areas (feathers, stone, leaves), never in smooth ones such as skies or blurred backgrounds, and each bit is written several times with error correction. It survives the apps re-encoding the picture:
+There is one way to send every Pigeon image: the Share button, or attach it as a normal photo in WhatsApp, Telegram or Signal. The message is hidden in the fine detail of the bird's textured areas (feathers, stone, leaves), never in smooth ones such as skies or blurred backgrounds, and each bit is written several times with error correction. It survives the apps re-encoding the picture:
 
 | App | Quality it re-encodes at (measured) | Message |
 |-----|------|---------|
 | WhatsApp | ≈ 69 | intact |
 | Telegram | ≈ 80 | intact |
+| Signal | ≈ 75 | intact |
 
-Birds are 1280 px on their long side, a size both apps keep. Resizing, cropping, editing or a screenshot erases the message; if a picture arrives at another size, Pigeon says so. Signal hasn't been tested yet. The research and measurements are in [docs/share-safe-research.md](docs/share-safe-research.md).
+Birds are 1280 px on their long side, a size both apps keep. Resizing, cropping, editing or a screenshot erases the message; if a picture arrives at another size, Pigeon says so. The research and measurements are in [docs/share-safe-research.md](docs/share-safe-research.md).
 
 ### Your birds (carriers)
 
