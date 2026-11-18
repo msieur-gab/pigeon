@@ -13,7 +13,7 @@ import * as qr from './utils/qr.js';
 import * as addSheet from './add-sheet.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-2';
+const APP_VERSION = '2026.11.18-3';
 
 // App state
 const state = {
@@ -120,7 +120,11 @@ export function init() {
             sync.scheduleSync();
             if (state.screen === 'home') render();
         },
-        onInvite: () => navigate('create-invite')
+        onInvite: () => navigate('create-invite'),
+        onRemoved: () => {
+            sync.scheduleSync();
+            if (state.screen === 'home') render();
+        }
     });
 
     // Check identity
@@ -354,7 +358,7 @@ function renderHome() {
         }
         for (const p of pending) {
             contactsHtml += `
-                <li class="contact-item pending">
+                <li class="contact-item pending" onclick="window.app.openPendingInvite('${esc(p.id)}')">
                     ${stamp.render(48, '')}
                     <span class="name">${esc(p.name)}</span>
                     <span class="fp">awaiting</span>
@@ -490,6 +494,7 @@ function renderSendMessage() {
             </div>
             ${renderSendTip()}
         </div>
+        <button class="btn btn-block btn-ghost text-muted" onclick="window.app.removeContact()">Remove contact</button>
     `;
 }
 
@@ -735,7 +740,9 @@ function setupEventListeners() {
         removeBird,
         editMessage,
         revealMessage,
-        openAddSheet: (step) => addSheet.open(step)
+        openAddSheet: (step) => addSheet.open(step),
+        openPendingInvite: (id) => addSheet.openInvite(id),
+        removeContact
     };
     setupDropAndPaste();
 }
@@ -1289,6 +1296,15 @@ function takeMeetLink() {
     const met = qr.parseMeetLink(location.hash);
     history.replaceState(null, '', location.pathname + location.search);
     return met;
+}
+
+function removeContact() {
+    const c = state.currentContact;
+    if (!c) return;
+    if (!confirm(`Remove ${c.name}? Their messages can't be opened until you add them again.`)) return;
+    contacts.remove(c.publicKey);
+    sync.scheduleSync(); // the backup on the server is replaced too
+    navigate('home', { currentContact: null });
 }
 
 function rejectClaim() {

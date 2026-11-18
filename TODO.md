@@ -84,5 +84,6 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [x] Message reveal with deciphering effect (revertible: `ENABLED` flag)
 - [x] Version shown in Settings
 - [x] Meet in person: QR code on a stamp, in-app scanner (native on Android, jsQR elsewhere), camera link with `#meet=`
+- [x] Cancel a waiting invite (tap it in the list) and remove a contact (contact screen); a backup server, if set, gets the change on the next sync
 - [x] Add a contact from a **+** button and a bottom sheet (meet in person / send an invite); ↓ open is a quiet button under your identity
 - [x] Pictures stored as small JPEG (contacts 96 px, your avatar 192 px): ~2–5 KB each instead of ~40 KB, so the backup fits a few hundred contacts (WebP left out: Safari can't create it)

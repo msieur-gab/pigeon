@@ -12,7 +12,7 @@ import * as contacts from './services/contacts.js';
 
 const view = { step: 'choose', tab: 'mine', met: null, note: '' };
 let stopCam = null;
-let hooks = { onAdded() {}, onInvite() {} };
+let hooks = { onAdded() {}, onInvite() {}, onRemoved() {} };
 let sheet, backdrop, body;
 
 function esc(value) {
@@ -45,6 +45,7 @@ export function bindChoices(root) {
  * @param {Object} opts
  * @param {Function} opts.onAdded - a contact was added (re-render home)
  * @param {Function} opts.onInvite - go to the invite screen
+ * @param {Function} opts.onRemoved - an invite was cancelled (re-render home)
  */
 export function init(opts) {
     hooks = { ...hooks, ...opts };
@@ -59,6 +60,17 @@ export function init(opts) {
 
 export function isOpen() {
     return sheet?.classList.contains('open') || false;
+}
+
+/** A waiting invite: when it was sent, and a way to cancel it */
+export function openInvite(id) {
+    const invite = contacts.getPending().find(p => p.id === id);
+    if (!invite) return;
+    Object.assign(view, { step: 'invite', invite });
+    render();
+    sheet.classList.add('open');
+    backdrop.classList.add('open');
+    document.body.classList.add('sheet-open');
 }
 
 /** step: 'choose' | 'meet' | 'confirm' (met = { publicKey, name }) */
@@ -113,6 +125,9 @@ function render() {
         body.innerHTML = renderConfirm();
         const add = document.getElementById('meet-add');
         if (add) add.onclick = addContact;
+    } else if (view.step === 'invite') {
+        body.innerHTML = renderInvite();
+        document.getElementById('invite-cancel').onclick = cancelInvite;
     }
 
     body.querySelectorAll('[data-close]').forEach(b => { b.onclick = close; });
@@ -172,6 +187,24 @@ function renderConfirm() {
             <input type="text" id="meet-name" value="${esc(m.name)}" placeholder="Bob">
         </div>
         <button class="btn btn-block mb-1" id="meet-add">Add contact</button>`;
+}
+
+function renderInvite() {
+    const inv = view.invite;
+    const sent = inv.createdAt
+        ? new Date(inv.createdAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+    return `
+        ${HEAD('invite', false)}
+        <p class="mb-1">Invite to <strong>${esc(inv.name)}</strong>${sent ? `, sent ${esc(sent)}` : ''}. Still waiting for their reply.</p>
+        <p class="text-muted text-small mb-1">If you cancel it, their reply can no longer be opened. You can always send a new invite.</p>
+        <button class="btn btn-block mb-1" id="invite-cancel">Cancel invite</button>`;
+}
+
+function cancelInvite() {
+    contacts.removePending(view.invite.id);
+    close();
+    hooks.onRemoved();
 }
 
 async function camOn() {
