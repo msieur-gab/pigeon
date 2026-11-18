@@ -109,6 +109,7 @@
     };
 
     let cover = null;          // ImageData at 1280 px
+    let plain = null;          // cover as sent with no message (JPEG at QUALITY), decoded
     let roomBr = 0, roomDm = 0;
     let view = 'orig';
     const out = {};            // { orig|f5|br|dm: {blob?, url, diff?, note?, error?} }
@@ -157,7 +158,7 @@
         const { data } = await imageDataOf(blob);
         const d = new ImageData(data.width, data.height);
         for (let i = 0; i < d.data.length; i += 4) {
-            for (let k = 0; k < 3; k++) d.data[i + k] = 128 + (data.data[i + k] - cover.data[i + k]) * 10;
+            for (let k = 0; k < 3; k++) d.data[i + k] = 128 + (data.data[i + k] - plain.data[i + k]) * 10;
             d.data[i + 3] = 255;
         }
         return toCanvas(d).toDataURL('image/jpeg', 0.9);
@@ -190,7 +191,11 @@
         $('make').textContent = 'Making…';
         try {
             Object.values(out).forEach(o => o.url?.startsWith('blob:') && URL.revokeObjectURL(o.url));
-            out.orig = { url: URL.createObjectURL(await toBlob(toCanvas(cover), 0.95)) };
+            // Original = the bird exactly as Pigeon would send it with no message
+            // (same JPEG quality), so tabs and "changes ×10" show only the hiding
+            const plainBlob = await toBlob(toCanvas(cover), QUALITY);
+            plain = (await imageDataOf(plainBlob)).data;
+            out.orig = { url: URL.createObjectURL(plainBlob) };
 
             // F5: plain JPEG at the app's quality, then F5 on its coefficients
             try {
