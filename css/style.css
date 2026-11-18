@@ -4,6 +4,8 @@
     --muted: #666;
     --border: #ccc;
     --accent: #000;
+    --warn: #9a6700;
+    --over: #c62828;
     --radius: 4px;
 }
 
@@ -13,6 +15,8 @@
     --muted: #888;
     --border: #333;
     --accent: #fff;
+    --warn: #e3b341;
+    --over: #ef6b6b;
 }
 
 * {
@@ -780,4 +784,5 @@ body.sheet-open .fab {
 
 /* How much text still fits in the bird */
 .room-left { margin: 0.35rem 0 0; min-height: 1.2em; }
-.room-left.room-over { color: var(--fg); font-weight: 600; }
+.room-left.room-low { color: var(--warn); }
+.room-left.room-over { color: var(--over); font-weight: 600; }

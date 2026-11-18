@@ -13,7 +13,7 @@ import * as addSheet from './add-sheet.js';
 import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-5';
+const APP_VERSION = '2026.11.18-6';
 
 // App state
 const state = {
@@ -696,6 +696,8 @@ function renderRoom(prefix) {
     return `<p class="text-small text-muted room-left" id="${prefix}-room" aria-live="polite"></p>`;
 }
 
+const ROOM_LOW = 30;   // characters left: the line turns to the warning colour
+
 function updateRoom() {
     const carrier = CARRIER_SCREENS[state.screen];
     const el = carrier && document.getElementById(`${carrier.prefix}-room`);
@@ -705,6 +707,7 @@ function updateRoom() {
     const text = carrier.text ? document.getElementById(carrier.text)?.value.trim() : '';
     const left = stego.textLeft(state.room, carrier.type, identity.getName(), text);
     el.classList.toggle('room-over', left < 0);
+    el.classList.toggle('room-low', left >= 0 && left < ROOM_LOW);
     if (btn) btn.disabled = left < 0;
     if (carrier.type === 'soul') {
         el.textContent = left < 0 ? 'This photo is too plain to hold your identity. Try another one.' : '';
