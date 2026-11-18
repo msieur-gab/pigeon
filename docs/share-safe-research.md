@@ -266,6 +266,26 @@ A deeper idea, if ever needed: place copies only in textured blocks (fewer
 wasted, so fewer touched), which needs a placement the reader reproduces
 exactly. Not needed while Gab can't see the changes.
 
+## Round 5: compressed twice (18 Nov 2026)
+
+A real message (a small photo enlarged to 1280 px, 73% smooth, ~210 bytes of
+room) sent WhatsApp → saved on the phone → Telegram → laptop arrived at
+q≈87 and 704×1280, unreadable (26% of copies damaged).
+
+Simulated on Gab's 8 birds, 115 bytes:
+
+| Route | faint (62) | normal (50) | sturdy (40) |
+|---|---|---|---|
+| same app twice (69+69, 80+80, 87+87) | all intact | | |
+| WhatsApp → Telegram (69+87) | all intact | all intact | all intact |
+| Telegram → WhatsApp (87+69) | **5 of 8 broken** | all intact | all intact, ≤2.4% damaged |
+| 80+69 | | 1 of 8 broken | all intact |
+
+The real failure took a route the simulation says faint survives, so the
+real chain (or that plain, enlarged bird) is harsher than the simulation.
+Decision (Gab): keep faint; a bird passed from one app to another is not a
+case to design for, "people are always using the same communication app".
+
 ## Next round of tests (proposed)
 
 1. **Texture-only brightness in the lab page**, with the room shown per bird;

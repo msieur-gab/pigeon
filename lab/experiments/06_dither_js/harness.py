@@ -1,5 +1,5 @@
 # Usage: python3 harness.py ../../dither.js 120 photo.jpg ...   (bytes; -0.9 = 90% of each photo's room)
-# env: QS=87,66,62 (qualities, 'sent' = no re-encode)  OPTS='{"grid":50}'
+# env: QS=87,66,62,69+87 (qualities; 'sent' = no re-encode; '69+87' = twice)  OPTS='{"grid":50}'
 # Sim: cover (1280 px) -> JS embed -> JPEG q92 (what Pigeon shares) -> app re-encode at q -> JS extract
 import sys, io, os, json, subprocess, random, tempfile
 import numpy as np
@@ -40,7 +40,10 @@ def run(mod, path, nbytes, qs, opts=None, tag=''):
     sent = jpg(st, 92)
     res = {}
     for q in qs:
-        rec = dec(sent) if q == 'sent' else dec(jpg(dec(sent), q))
+        if q == 'sent': rec = dec(sent)
+        else:                                   # '69+87': re-encoded twice (forwarded)
+            rec = dec(sent)
+            for step in str(q).split('+'): rec = dec(jpg(rec, int(step)))
         open(raw, 'wb').write(rgba(rec))
         x = node(mod, 'extract', raw, w, h)
         good = x.get('ok') and bytes.fromhex(x['bytes']) == msg
@@ -50,7 +53,7 @@ def run(mod, path, nbytes, qs, opts=None, tag=''):
 if __name__ == '__main__':
     mod = sys.argv[1]; nbytes = float(sys.argv[2]); photos = sys.argv[3:]
     opts = json.loads(os.environ['OPTS']) if os.environ.get('OPTS') else None
-    qs = [int(q) if q != 'sent' else q for q in os.environ.get('QS', '87,75,70,66,64,62,58,55').split(',')]
+    qs = [int(q) if q.isdigit() else q for q in os.environ.get('QS', '87,75,70,66,64,62,58,55').split(',')]
     nbytes = int(nbytes) if nbytes >= 1 else nbytes
     for p in photos:
         r = run(mod, p, nbytes, qs, opts)

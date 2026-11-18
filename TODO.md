@@ -57,7 +57,8 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - [ ] **Deciphering effect**: confirm the pace on the phone (now ~2 s; `MIN_MS` in `js/utils/decipher.js`)
 - [ ] **iPhone flow**: no share-sheet entry on iOS; check opening from Photos and Files
 - [ ] **Signal**: test that a bird shared as a photo survives (only WhatsApp and Telegram are tested)
-- [ ] **Forwarding**: test a bird forwarded twice (compressed twice), e.g. Telegram then WhatsApp
+- [ ] **Forwarding inside one app**: check that a WhatsApp or Telegram forward keeps the bird readable (simulated: compressed twice in the same app survives)
+- [ ] **Small, plain birds** hold little (a small photo enlarged to 1280 px: ~210 bytes, the text cut short). Options: the flock skips birds with little room when picking; warn when adding a small photo
 
 ## Research
 
@@ -70,6 +71,7 @@ Works today: a fresh phone restored from the 16 words gets back name, contacts a
 - No choice of hiding strength in the app: fixed at faint (62), the least visible one that survived WhatsApp and Telegram
 - No letters split across several birds for now: the text is limited to the room of the chosen bird, shown while typing
 - WeChat is not a target for now: the app is unlikely to be available in China
+- Not designed for a bird passed from one app to another (Telegram then WhatsApp breaks faint in simulation; sturdy would survive at twice the change). Gab, 18 Nov: "People are always using the same communication app"
 - Invites and replies to invites can't be edited after generating (they store a pending invite / add a contact); messages can
 - No message history: only the time and direction of the last exchange per contact, never the text
 
