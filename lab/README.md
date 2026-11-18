@@ -12,11 +12,25 @@ receive back with all three readers:
   across the image (`lab/brightness.js`; same idea as Phasm's Fortress mode,
   written from scratch).
 
-- **Dither**: five mid-frequency DCT values per textured 8×8 block set to
-  the quality-62 grid, parity = bit, at least 9 copies (`lab/dither.js`;
-  DMAS-style, written from scratch). Smooth areas never touched.
+- **Dither** (v2): five mid-frequency DCT values per textured 8×8 block set
+  to a grid (strength: faint 62 / normal 50 / sturdy 40), parity = bit, soft
+  votes, Reed-Solomon check bytes (`lab/dither.js`, `lab/rs.js`; DMAS-style,
+  written from scratch). Smooth areas never touched. Simulated: intact from
+  quality 87 down to 50 on 15 photos (`docs/share-safe-research.md`, round 3).
 
 Text is not encrypted here; it's a test of survival and looks.
+
+Viewer: flip the tabs to compare; **zoom 1:1** keeps the same spot in view
+across tabs; **hold: original** shows the original while pressed.
+
+## Real-send test (WhatsApp and Telegram)
+
+1. Choose a bird, keep or write a message (try a long one too), Make all three.
+2. Share or Save each version; send it to yourself as a normal photo in
+   WhatsApp and in Telegram (not as a file).
+3. In each app, save the photo you received, then **Check a received image**
+   here. It shows which method survived, the quality the app used and whether
+   it resized the picture.
 
 ## Results so far (18 Nov 2026, simulated, not yet a real send)
 

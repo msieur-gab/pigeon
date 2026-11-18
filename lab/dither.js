@@ -1,37 +1,58 @@
-// Dither-modulation hiding (lab). In each textured 8x8 block, five
-// mid-frequency DCT coefficients of the brightness (Y) are each set to the
-// nearest multiple of the quality-62 JPEG step whose parity is the bit.
-// Re-encoding at quality 62 or better keeps them on that grid, so the bits
-// survive Telegram and WhatsApp. Smooth blocks (skies, blurred backgrounds)
-// are never touched, which keeps the changes invisible.
+// Dither-modulation hiding (lab), version 2. In each textured 8x8 block, five
+// mid-frequency DCT coefficients of the brightness (Y) are each moved to the
+// nearest step of a grid whose parity is the bit. Smooth blocks (skies,
+// blurred backgrounds) are never touched, which keeps the changes invisible.
+//
+// Version 2 (18 Nov 2026), after testing v1 at qualities between 62 and 87:
+// - The grid is COARSER than the app's JPEG steps (grid quality, default 50),
+//   no longer "matched" to quality 62. A matched grid only survives that exact
+//   quality with the standard tables; at q64-70 the app's rounding moved values
+//   by almost half a step and most messages broke.
+// - The reader is stricter than the writer about texture (3.6 vs 3.0): a block
+//   counted but never written is pure noise; a written block skipped only
+//   loses one copy.
+// - Soft votes: each copy votes with its confidence (how close it sits to an
+//   even or odd step), so a copy half-way between steps counts for nothing.
+// - Reed-Solomon check bytes repair wrong bytes left after the vote.
+// - After writing, the pixels are rounded and clipped; two correction passes
+//   bring the coefficients back onto the grid.
 //
 // Same family as DMAS / GMAS in the research literature; written from scratch.
-// Python reference and measurements: lab/experiments/05_dither_vs_brightness.py
 
 import { crc32 } from './brightness.js';
+import * as rs from './rs.js';
 
 export const LONG_SIDE = 1280;
-const DESIGN_Q = 62;                                   // matched to WhatsApp-like quality
+export const DEFAULT_GRID = 50;                        // JPEG quality whose steps form the grid
 const POS = [[0, 2], [1, 1], [2, 0], [1, 2], [2, 1]];  // (row, col) frequencies used
-const TEXTURE = 3.0;                                   // Y std: write and read only above this
-const MAGIC = 0xd1;
-const HEADER_BITS = 32;                                // magic, copies, length (2 bytes)
-const HEADER_COPIES = 25;
-const MIN_COPIES = 9;
+const T_WRITE = 3.0;                                   // Y std: write only above this
+const T_READ = 3.6;                                    // ... read only above this (stricter)
+const MAGIC = 0xd2;                                    // v2 (v1 was 0xd1)
+const HEADER_BYTES = 5;                                // magic, copies, grid, length (2 bytes)
+const HEADER_NSYM = 6;                                 // + RS check bytes (repairs 3)
+const HEADER_CODED = HEADER_BYTES + HEADER_NSYM;
+const HEADER_COPIES = 31;                              // fixed: the reader needs it before anything else
+const MIN_COPIES = 7;
+const NSYM = 16;                                       // RS check bytes per codeword (repairs 8)
+const CHUNK = 255 - NSYM;
 const SEED = 0x85ebca6b;
+
+/** Grid qualities the lab offers (coarser = sturdier but stronger changes) */
+export const GRIDS = [62, 50, 40];
 
 const BASE = [
     [16, 11, 10, 16, 24, 40, 51, 61], [12, 12, 14, 19, 26, 58, 60, 55],
     [14, 13, 16, 24, 40, 57, 69, 56], [14, 17, 22, 29, 51, 87, 80, 62],
     [18, 22, 37, 56, 68, 109, 103, 77], [24, 35, 55, 64, 81, 104, 113, 92],
     [49, 64, 78, 87, 103, 121, 120, 101], [72, 92, 95, 98, 112, 100, 103, 99]];
-const SCALE = DESIGN_Q < 50 ? 5000 / DESIGN_Q : 200 - 2 * DESIGN_Q;
-const STEPS = POS.map(([u, v]) => Math.max(1, Math.floor((BASE[u][v] * SCALE + 50) / 100)));
+function stepsFor(q) {
+    const scale = q < 50 ? 5000 / q : 200 - 2 * q;
+    return POS.map(([u, v]) => Math.max(1, Math.floor((BASE[u][v] * scale + 50) / 100)));
+}
 
 // Orthonormal 8-point DCT basis (same as JPEG's DCT)
 const C = Array.from({ length: 8 }, (_, k) =>
     Array.from({ length: 8 }, (_, n) => (k ? Math.sqrt(2 / 8) : Math.sqrt(1 / 8)) * Math.cos((2 * n + 1) * k * Math.PI / 16)));
-// basis[p][y*8+x]: the 8x8 pattern of position p
 const BASIS = POS.map(([u, v]) => {
     const b = new Float64Array(64);
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) b[y * 8 + x] = C[u][y] * C[v][x];
@@ -50,132 +71,165 @@ function permutation(n) {
     return p;
 }
 
-// Per block: Y values (64), texture (std), and the 5 coefficients
+const lum = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+
+// The 5 coefficients of one block, written into out[o..o+4]
+function blockCoef(imageData, b, bw, out, o) {
+    const { width, data } = imageData;
+    const bx = b % bw, by = (b / bw) | 0;
+    for (let p = 0; p < POS.length; p++) out[o + p] = 0;
+    for (let y = 0; y < 8; y++) {
+        let i = ((by * 8 + y) * width + bx * 8) * 4;
+        for (let x = 0; x < 8; x++, i += 4) {
+            const Y = lum(data, i), k = y * 8 + x;
+            for (let p = 0; p < POS.length; p++) out[o + p] += BASIS[p][k] * Y;
+        }
+    }
+}
+
+// Per block: texture (std of Y) and the 5 coefficients
 function analyse(imageData) {
     const { width, height, data } = imageData;
     const bw = width >> 3, bh = height >> 3, n = bw * bh;
     const std = new Float32Array(n);
     const coef = new Float64Array(n * POS.length);
-    const y64 = new Float64Array(64);
     for (let b = 0; b < n; b++) {
         const bx = b % bw, by = (b / bw) | 0;
         let sum = 0, sq = 0;
         for (let y = 0; y < 8; y++) {
             let i = ((by * 8 + y) * width + bx * 8) * 4;
-            for (let x = 0; x < 8; x++, i += 4) {
-                const Y = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                y64[y * 8 + x] = Y; sum += Y; sq += Y * Y;
-            }
+            for (let x = 0; x < 8; x++, i += 4) { const Y = lum(data, i); sum += Y; sq += Y * Y; }
         }
         const mean = sum / 64;
         std[b] = Math.sqrt(Math.max(0, sq / 64 - mean * mean));
-        for (let p = 0; p < POS.length; p++) {
-            let c = 0;
-            const B = BASIS[p];
-            for (let k = 0; k < 64; k++) c += B[k] * y64[k];
-            coef[b * POS.length + p] = c;
-        }
+        blockCoef(imageData, b, bw, coef, b * POS.length);
     }
     return { bw, bh, n, std, coef };
 }
 
 // slot s -> [block, position]: a shuffled block order, one position per pass,
 // so consecutive slots (the copies of one bit) sit in different blocks
-function slot(perm, n, s) {
-    return [perm[s % n], (s / n) | 0];
+const slot = (perm, n, s) => [perm[s % n], (s / n) | 0];
+
+// Share of blocks a copy is likely lost in: smooth to the writer, or close
+// enough to the reader's threshold to drop below it after compression
+function lostShare(A) {
+    let lost = 0;
+    for (let b = 0; b < A.n; b++) if (A.std[b] < T_READ * 1.1) lost++;
+    return lost / A.n;
 }
 
-function chooseCopies(nbits, smoothShare, slots) {
-    for (let r = MIN_COPIES; r < 64; r += 2) {
-        if (nbits * Math.pow(smoothShare, r) < 1e-3 && HEADER_BITS * HEADER_COPIES + nbits * r <= slots) return r;
+const codedLength = len => { const body = len + 4; return body + Math.ceil(body / CHUNK) * NSYM; };
+
+function chooseCopies(nbits, lost, slots) {
+    for (let r = MIN_COPIES; r < 64; r++) {
+        // expected bits with every copy lost < 0.05; RS repairs the rare one
+        if (nbits * Math.pow(lost, r) < 0.05 && HEADER_CODED * 8 * HEADER_COPIES + nbits * r <= slots) return r;
     }
     return 0;
 }
 
-/** Room for text, in bytes, in this picture (needs the pixels: depends on texture) */
+/** Room for text, in bytes, in this picture (depends on its texture) */
 export function capacityFor(imageData) {
     const A = analyse(imageData);
-    let smooth = 0;
-    for (let b = 0; b < A.n; b++) if (A.std[b] < TEXTURE) smooth++;
-    const share = smooth / A.n, slots = A.n * POS.length;
-    let best = 0;
-    for (let len = 1; len < 4000; len++) {
-        if (!chooseCopies((len + 4) * 8, share, slots)) break;
-        best = len;
+    const lost = lostShare(A), slots = A.n * POS.length;
+    let lo = 0, hi = 4000;
+    while (lo < hi) {                                   // largest length that still fits
+        const mid = (lo + hi + 1) >> 1;
+        if (chooseCopies(codedLength(mid) * 8, lost, slots)) lo = mid; else hi = mid - 1;
     }
-    return best;
+    return lo;
 }
 
 /** Hide bytes in the picture (changes imageData in place) */
-export function embed(imageData, bytes) {
+export function embed(imageData, bytes, { grid = DEFAULT_GRID } = {}) {
     const A = analyse(imageData);
-    const { width, data } = imageData;
-    let smooth = 0;
-    for (let b = 0; b < A.n; b++) if (A.std[b] < TEXTURE) smooth++;
+    const STEPS = stepsFor(grid);
 
+    // body: bytes + CRC32, cut into Reed-Solomon codewords
     const body = new Uint8Array(bytes.length + 4);
     body.set(bytes);
     const crc = crc32(bytes);
     body.set([crc >>> 24, (crc >>> 16) & 255, (crc >>> 8) & 255, crc & 255], bytes.length);
-    const r = chooseCopies(body.length * 8, smooth / A.n, A.n * POS.length);
+    const coded = new Uint8Array(codedLength(bytes.length));
+    for (let i = 0, o = 0; i < body.length; i += CHUNK) {
+        const cw = rs.encode(body.subarray(i, i + CHUNK), NSYM);
+        coded.set(cw, o); o += cw.length;
+    }
+
+    const r = chooseCopies(coded.length * 8, lostShare(A), A.n * POS.length);
     if (!r) throw new Error(`Too long for this bird: ${bytes.length} bytes, room for ${capacityFor(imageData)}`);
 
-    const head = new Uint8Array([MAGIC, r, bytes.length >> 8, bytes.length & 255]);
+    const head = rs.encode(new Uint8Array([MAGIC, r, grid, bytes.length >> 8, bytes.length & 255]), HEADER_NSYM);
     const bitAt = (arr, i) => (arr[i >> 3] >> (7 - (i & 7))) & 1;
     const perm = permutation(A.n);
-    const delta = new Float64Array(A.n * POS.length);
+    const target = new Float64Array(A.n * POS.length).fill(NaN);
 
     let s = 0;
     const write = (bit, copies) => {
         for (let k = 0; k < copies; k++, s++) {
             const [b, p] = slot(perm, A.n, s);
-            if (A.std[b] < TEXTURE) continue;           // smooth: never touched
+            if (A.std[b] < T_WRITE) continue;            // smooth: never touched
             const q = STEPS[p], c = A.coef[b * POS.length + p];
             let m = Math.round(c / q);
             if ((m & 1) !== bit) m += c / q > m ? 1 : -1;
-            delta[b * POS.length + p] = m * q - c;
+            target[b * POS.length + p] = m * q;
         }
     };
-    for (let i = 0; i < HEADER_BITS; i++) write(bitAt(head, i), HEADER_COPIES);
-    for (let i = 0; i < body.length * 8; i++) write(bitAt(body, i), r);
+    for (let i = 0; i < HEADER_CODED * 8; i++) write(bitAt(head, i), HEADER_COPIES);
+    for (let i = 0; i < coded.length * 8; i++) write(bitAt(coded, i), r);
 
-    // add the changes to R, G and B equally (moves brightness, not colour)
-    let touched = 0;
+    // Move each written block's coefficients to their targets, adding the
+    // change to R, G and B equally (moves brightness, not colour). Pixels are
+    // rounded and clipped, so measure again and correct, twice.
+    const blocks = [];
     for (let b = 0; b < A.n; b++) {
-        let any = false;
-        for (let p = 0; p < POS.length; p++) if (delta[b * POS.length + p]) { any = true; break; }
-        if (!any) continue;
-        touched++;
-        const bx = b % A.bw, by = (b / A.bw) | 0;
-        for (let y = 0; y < 8; y++) {
-            let i = ((by * 8 + y) * width + bx * 8) * 4;
-            for (let x = 0; x < 8; x++, i += 4) {
-                let d = 0;
-                for (let p = 0; p < POS.length; p++) d += delta[b * POS.length + p] * BASIS[p][y * 8 + x];
-                data[i] += d; data[i + 1] += d; data[i + 2] += d;   // clamped and rounded
+        for (let p = 0; p < POS.length; p++) if (!Number.isNaN(target[b * POS.length + p])) { blocks.push(b); break; }
+    }
+    const { width, data } = imageData;
+    const now = new Float64Array(POS.length), delta = new Float64Array(POS.length);
+    for (let pass = 0; pass < 3; pass++) {
+        for (const b of blocks) {
+            const o = b * POS.length;
+            if (pass) blockCoef(imageData, b, A.bw, now, 0);
+            else for (let p = 0; p < POS.length; p++) now[p] = A.coef[o + p];
+            for (let p = 0; p < POS.length; p++) {
+                const t = target[o + p];
+                delta[p] = Number.isNaN(t) ? 0 : t - now[p];
+            }
+            const bx = b % A.bw, by = (b / A.bw) | 0;
+            for (let y = 0; y < 8; y++) {
+                let i = ((by * 8 + y) * width + bx * 8) * 4;
+                for (let x = 0; x < 8; x++, i += 4) {
+                    let d = 0;
+                    for (let p = 0; p < POS.length; p++) d += delta[p] * BASIS[p][y * 8 + x];
+                    data[i] += d; data[i + 1] += d; data[i + 2] += d;   // clamped and rounded
+                }
             }
         }
     }
-    return { copies: r, touched: touched / A.n };
+    return { copies: r, grid, touched: blocks.length / A.n };
 }
 
-/** Read hidden bytes back: {ok, bytes?, rawErrors, reason?} */
+/** Read hidden bytes back: {ok, bytes?, rawErrors, fixed?, copies?, grid?, reason?} */
 export function extract(imageData) {
     const A = analyse(imageData);
     const perm = permutation(A.n);
-    let s = 0, reads = 0, disagree = 0;
+    let s = 0, reads = 0, disagree = 0, STEPS = stepsFor(DEFAULT_GRID);
 
-    const readBit = (copies) => {
-        const votes = [];
+    // Soft vote: cos(pi * c/step) is +1 on an even step, -1 on an odd one,
+    // 0 half-way between. Sum the copies; the sign is the bit.
+    const readBit = copies => {
+        let sum = 0, n = 0, neg = 0;
         for (let k = 0; k < copies; k++, s++) {
             const [b, p] = slot(perm, A.n, s);
-            if (A.std[b] < TEXTURE) continue;
-            votes.push(Math.round(A.coef[b * POS.length + p] / STEPS[p]) & 1);
+            if (A.std[b] < T_READ) continue;
+            const v = Math.cos(Math.PI * A.coef[b * POS.length + p] / STEPS[p]);
+            sum += v; n++; if (v < 0) neg++;
         }
-        const ones = votes.reduce((x, y) => x + y, 0);
-        const bit = ones * 2 > votes.length ? 1 : 0;
-        reads += votes.length;
-        disagree += bit ? votes.length - ones : ones;
+        const bit = sum < 0 ? 1 : 0;
+        reads += n;
+        disagree += bit ? n - neg : neg;
         return bit;
     };
     const readBytes = (count, copies) => {
@@ -185,15 +239,32 @@ export function extract(imageData) {
     };
     const rate = () => (reads ? disagree / reads : 0);
 
-    const head = readBytes(4, HEADER_COPIES);
-    if (head[0] !== MAGIC) return { ok: false, rawErrors: rate(), reason: 'no hidden message found' };
-    const r = head[1], len = (head[2] << 8) | head[3];
-    if (r < MIN_COPIES || HEADER_BITS * HEADER_COPIES + (len + 4) * 8 * r > A.n * POS.length) {
+    // The grid is in the header, which is itself on the grid: try each grid
+    // the lab offers until the header reads back with that grid in it
+    let head = null;
+    for (const g of [DEFAULT_GRID, ...GRIDS.filter(g => g !== DEFAULT_GRID)]) {
+        s = 0; reads = 0; disagree = 0; STEPS = stepsFor(g);
+        const h = rs.decode(readBytes(HEADER_CODED, HEADER_COPIES), HEADER_NSYM)?.data;
+        if (h && h[0] === MAGIC && h[2] === g) { head = h; break; }
+    }
+    if (!head) return { ok: false, rawErrors: rate(), reason: 'no hidden message found' };
+    const r = head[1], grid = head[2], len = (head[3] << 8) | head[4];
+    const n = codedLength(len);
+    if (r < MIN_COPIES || HEADER_CODED * 8 * HEADER_COPIES + n * 8 * r > A.n * POS.length) {
         return { ok: false, rawErrors: rate(), reason: 'damaged (bad header)' };
     }
-    const body = readBytes(len + 4, r);
+    const coded = readBytes(n, r);
+    const body = new Uint8Array(len + 4);
+    let fixed = 0;
+    for (let i = 0, o = 0; i < body.length; i += CHUNK) {
+        const k = Math.min(CHUNK, body.length - i);
+        const d = rs.decode(coded.subarray(o, o + k + NSYM), NSYM);
+        o += k + NSYM;
+        if (!d) return { ok: false, rawErrors: rate(), reason: 'damaged (too many errors to repair)' };
+        body.set(d.data, i); fixed += d.fixed;
+    }
     const bytes = body.slice(0, len), c = body.slice(len);
     const crc = ((c[0] << 24) | (c[1] << 16) | (c[2] << 8) | c[3]) >>> 0;
     if (crc !== crc32(bytes)) return { ok: false, rawErrors: rate(), reason: 'damaged (check failed)' };
-    return { ok: true, bytes, rawErrors: rate(), copies: r };
+    return { ok: true, bytes, rawErrors: rate(), fixed, copies: r, grid };
 }

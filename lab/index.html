@@ -7,7 +7,12 @@
     <link rel="stylesheet" href="../css/style.css">
     <script src="../js/vendor/f5stego.min.js"></script>
     <style>
-        .viewer img { width: 100%; display: block; border: 1px solid var(--border); border-radius: var(--radius); }
+        .viewer { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .viewer img { width: 100%; display: block; }
+        .viewer.zoom { overflow: auto; max-height: 70vh; overscroll-behavior: contain; }
+        .viewer.zoom img { width: auto; max-width: none; }
+        .row select { width: auto; padding: 0.25rem 0.4rem; font-size: 0.8125rem; }
+        .row .btn { padding: 0.3rem 0.6rem; font-size: 0.8125rem; user-select: none; -webkit-user-select: none; touch-action: none; }
         .tabs { display: flex; border: 1px solid var(--fg); border-radius: var(--radius); overflow: hidden; margin: 0.75rem 0 0.5rem; }
         .tabs button { flex: 1; border: none; border-radius: 0; padding: 0.4rem 0.2rem; font-size: 0.8125rem; }
         .tabs button + button { border-left: 1px solid var(--fg); }
@@ -42,6 +47,16 @@
             <textarea id="msg">Meet me at the old bridge at seven. Bring the blue notebook and come alone.</textarea>
         </div>
         <p class="mono-small" id="room"></p>
+        <div class="row">
+            <label>dither strength
+                <select id="grid">
+                    <option value="62">faint (62)</option>
+                    <option value="50" selected>normal (50)</option>
+                    <option value="40">sturdy (40)</option>
+                </select>
+            </label>
+            <span class="mono-small">Stronger survives harsher compression but changes the picture more.</span>
+        </div>
         <button class="btn btn-block" id="make" disabled>Make all three</button>
 
         <div id="made" class="hidden">
@@ -51,11 +66,13 @@
                 <button data-view="br" aria-pressed="false">Brightness</button>
                 <button data-view="dm" aria-pressed="false">Dither</button>
             </div>
-            <div class="viewer"><img id="view" alt="bird"></div>
+            <div class="viewer" id="viewer"><img id="view" alt="bird"></div>
             <div class="row">
+                <label><input type="checkbox" id="zoom"> zoom 1:1</label>
                 <label><input type="checkbox" id="diff"> show changes ×10</label>
-                <span class="mono-small">Flip between the tabs to compare.</span>
+                <button class="btn" id="hold">hold: original</button>
             </div>
+            <p class="mono-small">Flip between the tabs to compare; in zoom the same spot stays in view.</p>
             <div id="methods"></div>
         </div>
     </div>
@@ -196,10 +213,12 @@
             // Dither: change mid-scale detail in textured squares, then a normal JPEG
             try {
                 const c = copyOf(cover);
-                const info = dm.embed(c, bytes);
+                const grid = Number($('grid').value);
+                const info = dm.embed(c, bytes, { grid });
                 out.dm = {
                     blob: await toBlob(toCanvas(c), QUALITY),
-                    note: `${NOTES.dm} · ${Math.round(info.touched * 100)}% of squares touched, ${info.copies} copies per bit`
+                    file: `bird-dither${grid}.jpg`,
+                    note: `${NOTES.dm} · strength ${grid} · ${Math.round(info.touched * 100)}% of squares touched, ${info.copies} copies per bit`
                 };
             } catch (err) { out.dm = { error: err.message }; }
 
@@ -228,7 +247,7 @@
                 <div class="method">
                     <div class="info"><strong>${NAMES[k]}</strong><span>${(o.blob.size / 1024).toFixed(0)} KB · ${esc(o.note)}</span></div>
                     <button class="btn" data-share="${k}">Share</button>
-                    <a class="btn" href="${o.url}" download="bird-${k}.jpg">Save</a>
+                    <a class="btn" href="${o.url}" download="${o.file || `bird-${k}.jpg`}">Save</a>
                 </div>`;
         }).join('');
         document.querySelectorAll('[data-share]').forEach(b => b.onclick = () => share(b.dataset.share));
@@ -244,8 +263,27 @@
     document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
     $('diff').onchange = () => setView(view);
 
+    // Zoom 1:1: the viewer scrolls; switching tabs keeps the scroll, so the
+    // same spot of each version can be compared
+    $('zoom').onchange = () => {
+        const v = $('viewer');
+        v.classList.toggle('zoom', $('zoom').checked);
+        if ($('zoom').checked) {                    // start in the middle
+            requestAnimationFrame(() => {
+                v.scrollLeft = (v.scrollWidth - v.clientWidth) / 2;
+                v.scrollTop = (v.scrollHeight - v.clientHeight) / 2;
+            });
+        }
+    };
+    // Hold the button: the original shows in place of the current version
+    const holdOn = e => { e.preventDefault(); if (out.orig) $('view').src = out.orig.url; };
+    const holdOff = () => setView(view);
+    $('hold').addEventListener('pointerdown', holdOn);
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('hold').addEventListener(ev, holdOff);
+    $('hold').addEventListener('contextmenu', e => e.preventDefault());
+
     async function share(k) {
-        const file = new File([out[k].blob], `bird-${k}.jpg`, { type: 'image/jpeg' });
+        const file = new File([out[k].blob], out[k].file || `bird-${k}.jpg`, { type: 'image/jpeg' });
         try {
             if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
             else alert('Sharing files is not available here. Use Save.');
@@ -285,9 +323,12 @@
                 const r2 = mod.extract(scaled);
                 if (r2.ok || r2.rawErrors < r.rawErrors) { r = r2; note = ' (after scaling back to 1280 px)'; }
             }
+            const extra = k === 'dm' && r.ok
+                ? ` · strength ${r.grid}, ${r.copies} copies per bit, ${r.fixed} byte${r.fixed === 1 ? '' : 's'} repaired by the check code`
+                : '';
             lines.push(r.ok
-                ? `<p class="result ok">${NAMES[k]}: ✓ message intact · ${(r.rawErrors * 100).toFixed(1)}% of hidden copies damaged, all repaired${note}</p>`
-                : `<p class="result bad">${NAMES[k]}: ✗ ${esc(r.reason)}${note}</p>`);
+                ? `<p class="result ok">${NAMES[k]}: ✓ message intact · ${(r.rawErrors * 100).toFixed(1)}% of hidden copies damaged, all repaired${extra}${note}</p>`
+                : `<p class="result bad">${NAMES[k]}: ✗ ${esc(r.reason)} · ${(r.rawErrors * 100).toFixed(1)}% of copies damaged${note}</p>`);
             if (r.ok && text === null) text = dec.decode(r.bytes);
         }
         if (text !== null) lines.push(`<div class="message-preview message-text">${esc(text)}</div>`);

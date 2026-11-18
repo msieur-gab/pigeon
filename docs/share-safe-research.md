@@ -166,6 +166,61 @@ keeps the value on that grid. At least 9 copies per bit, majority vote.
 - **Open risk:** if WhatsApp's real quality is below 62, dither must be
   matched lower (bigger, more visible changes). Measure the real apps first.
 
+## Round 3: dither v2, tested between the qualities (18 Nov 2026)
+
+Scope (Gab, 18 Nov): **WhatsApp and Telegram only; WeChat dropped for now.**
+"People will need the Pigeon app to run it, and I think the app will not be
+available in China anyway."
+
+`lab/experiments/06_dither_js/` runs the **JavaScript itself** (`lab/dither.js`
+through Node), not a Python copy: cover at 1280 px → embed → JPEG q92 (what
+Pigeon shares) → re-encode at quality q → extract. 15 of Gab's own photos
+(mostly portrait mode, blurred backgrounds), not in the repo.
+
+**v1 broke between the tested qualities.** Round 2 tested only q87, q62 and
+q55. At q64–q75, v1 failed on most photos, and one photo failed at q87 too.
+The cause is the "matched to q62" grid: it survives only *exactly* q62 with
+the standard tables. At any other quality the app's own rounding can move a
+value by up to half of its own step, which at q64 is almost half a grid step,
+so no margin is left. Real apps won't use exactly q62.
+
+**Fixes in v2** (`lab/dither.js`):
+
+| Problem in v1 | Fix in v2 |
+|---|---|
+| Grid matched to q62, so no margin at q63–q86 | Grid coarser than the app's steps: **grid quality 50** by default (62 and 40 selectable in the lab); the grid is written in the header |
+| Writer and reader use the same texture threshold (3.0); after compression, up to 11% of the blocks the reader counted had never been written (pure noise) | Reader is stricter (3.6) than writer (3.0): fake votes ≤4%; a skipped block only loses one copy |
+| Majority vote, ties read as 0 | Soft votes: cos(π·value/step), so a copy half-way between steps counts for nothing |
+| No error correction | Reed-Solomon (`lab/rs.js`): 16 check bytes per codeword repair 8 wrong bytes; the header has its own (6 check bytes, 31 copies). Fixed the failure on a mostly smooth picture, where 25 plain header copies left only 4–5 readable |
+| Rounding and clipping of pixels move values off the grid | Two correction passes after writing |
+
+**Results, 120 bytes**: 5 photos × 11 qualities (no re-encode, then
+87/80/75/70/66/64/62/58/55/50): **all intact** at grid 50 and at grid 40.
+At grid 62 (≈ v1 strength) still 2 failures at q55–q50.
+
+**Results, 90% of each photo's room, grid 50**: 15 photos × q87/75/66/64/62/58/55:
+**all intact**, at most 8.6% of copies damaged (on the 77%-smooth picture).
+Room: ~150 bytes (mostly smooth web picture) to ~1,150 (busy photos); most
+camera photos 250–900.
+
+| Grid | Average change (120 bytes) | Survives (simulated) |
+|---|---|---|
+| 62, faint | 0.20–0.27 levels | q58 and up |
+| 50, normal (default) | 0.32–0.38 | q50 and up |
+| 40, sturdy | 0.43–0.52 | q50 and up, fewer damaged copies |
+
+A full message changes the picture more (1.0–1.5 levels on busy photos at
+90% of room) than a short one: the eye test should include a long message.
+
+Still only a simulation (PIL's standard tables, one re-encode). Not yet
+known: the apps' real quality and tables, a second re-encode (forwarding),
+resizing. The lab's checker reports quality and resizing of what arrives.
+
+Open, not for the lab: anyone with this code can find a Pigeon bird (fixed
+public shuffle seed, known header), as with F5's fixed key today. The content
+stays encrypted, but being *detected* may matter to people under censorship.
+A design question for when one method moves into the app.
+
 ## Next round of tests (proposed)
 
 1. **Texture-only brightness in the lab page**, with the room shown per bird;
@@ -174,12 +229,11 @@ keeps the value on that grid. At least 9 copies per bit, majority vote.
    classification the reader reproduces exactly (e.g. coarse regions + a
    threshold chosen with a margin, written in a robust header). Target: 2–3×
    the room on smooth birds (~140–190 chars on the blurred close-up).
-3. **Add Reed-Solomon** instead of plain repetition (more room for the same
-   safety; would have fixed the rust case).
-4. ~~Prototype mid-frequency AC dither modulation~~ done (round 2): it wins.
-   Ported to the lab page (`lab/dither.js`); simulated q87/q62 pass on four
-   birds through the page. Next: real Telegram and WhatsApp sends, Gab judges
-   by eye.
+3. ~~Add Reed-Solomon~~ done in dither v2 (round 3), on top of copies.
+4. ~~Prototype mid-frequency AC dither modulation~~ done (round 2), made
+   sturdy between qualities in v2 (round 3). **Next: real WhatsApp and
+   Telegram sends at strengths 50 and 40, short and long message; Gab judges
+   by eye** (zoom 1:1 in the lab).
 5. **Real-app quality check**: measure the actual JPEG quality and size
    Telegram and WhatsApp deliver (the lab's checker prints both), to tune the
    margin.
@@ -195,4 +249,5 @@ python3 lab/experiments/01_f5_vs_brightness.py
 python3 lab/experiments/02_capacity_1280.py
 python3 lab/experiments/03_nudge_size_by_texture.py photo.jpg
 python3 lab/experiments/04_texture_only.py folder-of-birds/
+cd lab/experiments/06_dither_js && python3 harness.py ../../dither.js 120 photo.jpg   # the JS itself, needs node
 ```

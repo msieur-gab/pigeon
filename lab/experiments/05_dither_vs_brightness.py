@@ -14,7 +14,7 @@ from PIL import Image
 from scipy.fft import dctn, idctn
 
 T_SEND = float(os.environ.get('T_SEND', '3.0'))   # texture threshold (Y std) to write
-T_READ = float(os.environ.get('T_READ', '3.0'))   # ... and to read (a little lower: margin)
+T_READ = float(os.environ.get('T_READ', '3.0'))   # ... and to read. The reader must be STRICTER (higher), not lower: a block read but never written is noise (see lab/dither.js v2)
 DESIGN_Q = 62                        # quality the dither steps are matched to
 POS = [(0, 2), (1, 1), (2, 0), (1, 2), (2, 1)]   # mid-frequency positions used
 HEADER = 32                          # header bits, written with HR copies
