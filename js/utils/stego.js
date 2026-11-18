@@ -1,80 +1,111 @@
-// Steganography module - F5 (JPEG) encoding
-// Compression-resistant, survives Telegram/WhatsApp sharing
+// Steganography: hides Pigeon payloads in the bird's pixels with dither
+// modulation (js/utils/dither.js). The hidden bytes survive WhatsApp and
+// Telegram re-encoding the picture as a photo, as long as it isn't resized,
+// cropped or edited. One way for every image: share it like any photo.
 
-import * as f5 from './stego-f5.js';
+import * as dither from './dither.js';
+import * as codec from './payload-codec.js';
+
+const CROP = 0.06;          // random crop per side, so no two images share pixels
+const QUALITY = 0.92;       // JPEG quality of the image Pigeon shares
+
+function loadImg(blob) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read this image')); };
+        img.src = url;
+    });
+}
 
 /**
- * Encode payload into image using F5
- * @param {File|Blob|ImageData|Uint8Array} source - Image source
- * @param {Object} payload - Data to encode
- * @param {number} [quality=0.92] - JPEG quality
+ * Prepare a carrier from a photo: 1280 px on its long side, slightly cropped.
+ * @param {Blob|File} blob
+ * @returns {Promise<{cover: ImageData, room: number}>} room: bytes it can hide
+ */
+export async function prepareCarrier(blob) {
+    const cover = dither.prepareCover(await loadImg(blob), { crop: CROP });
+    return { cover, room: dither.capacityFor(cover) };
+}
+
+// Bytes a payload takes besides the message text (see payload-codec.js):
+// header 4, keys 32 each, nonce 24, name 1 + its bytes (max 64),
+// message length 2, encryption tag 16
+const nameBytes = name => Math.min(64, new TextEncoder().encode(name || '').length);
+export function overhead(type, name) {
+    switch (type) {
+        case 'msg': return 4 + 24 + 2 + 16;
+        case 'claim': return 4 + 32 + 24 + 1 + nameBytes(name) + 2 + 16;
+        case 'invite': return 4 + 32 + 32 + 24 + 1 + nameBytes(name) + 2 + 16;
+        case 'soul': return 4 + 16 + 1 + 1 + nameBytes(name);
+        default: throw new Error('Unknown payload type');
+    }
+}
+
+/** Bytes of text left in a bird of `room` bytes (negative: too long) */
+export function textLeft(room, type, name, text) {
+    return room - overhead(type, name) - new TextEncoder().encode(text || '').length;
+}
+
+/**
+ * Hide a payload in the cover and make the JPEG to share.
+ * @param {ImageData} cover - from prepareCarrier (left untouched)
+ * @param {Object} payload
  * @returns {Promise<{jpegData: Uint8Array, blob: Blob, dataURL: string}>}
  */
-export async function encodeRobust(source, payload, quality = 0.92) {
-    let jpegData;
-
-    if (source instanceof Uint8Array) {
-        jpegData = source;
-    } else if (source instanceof ImageData) {
-        jpegData = await f5.canvasToJpeg(source, quality);
-    } else if (source instanceof File || source instanceof Blob) {
-        const loaded = await f5.loadImageAsJpeg(source, quality);
-        jpegData = loaded.jpegData;
-    } else {
-        throw new Error('Invalid source type');
+export async function encodeRobust(cover, payload) {
+    const bytes = codec.encode(payload);
+    const room = dither.capacityFor(cover);
+    if (bytes.length > room) {
+        throw new Error(`Too long for this bird by ${bytes.length - room} characters. Shorten it, or try another bird.`);
     }
+    const pixels = new ImageData(new Uint8ClampedArray(cover.data), cover.width, cover.height);
+    dither.embed(pixels, bytes);
 
-    const stegoJpeg = f5.encode(jpegData, payload);
-
+    const canvas = document.createElement('canvas');
+    canvas.width = pixels.width;
+    canvas.height = pixels.height;
+    canvas.getContext('2d').putImageData(pixels, 0, 0);
+    const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Could not make the image'))), 'image/jpeg', QUALITY));
     return {
-        jpegData: stegoJpeg,
-        blob: f5.jpegToBlob(stegoJpeg),
-        dataURL: f5.jpegToDataURL(stegoJpeg)
+        jpegData: new Uint8Array(await blob.arrayBuffer()),
+        blob,
+        dataURL: URL.createObjectURL(blob)
     };
 }
 
 /**
- * Decode payload from image file
- * @param {File|Blob} file - Image file
- * @returns {Promise<Object>} - Decoded payload
+ * Read the payload hidden in an image.
+ * Throws 'No hidden data found' when there is none (or it was destroyed);
+ * other errors (e.g. made by a newer Pigeon) come from the payload codec.
+ * @param {File|Blob} file
+ * @returns {Promise<Object>}
  */
 export async function decodeFile(file) {
-    const jpegData = await f5.loadJpegDirect(file);
-    return f5.decode(jpegData);
+    const { imageData } = await loadImage(file);
+    const found = dither.extract(imageData);
+    if (!found.ok) throw new Error('No hidden data found');
+    return codec.decode(found.bytes);
 }
 
 /**
- * Analyze JPEG capacity for F5 encoding
- * @param {Uint8Array} jpegData - JPEG data
- * @returns {Object} - Capacity info
+ * Load an image file and return its pixels at its own size.
+ * @returns {Promise<{imageData: ImageData, width: number, height: number}>}
  */
-export function analyzeCapacity(jpegData) {
-    return f5.analyze(jpegData);
+export async function loadImage(file) {
+    const img = await loadImg(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    return {
+        imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
+        width: canvas.width,
+        height: canvas.height
+    };
 }
 
-/**
- * Load image file to canvas and return imageData
- * Used for thumbnail extraction
- */
-export function loadImage(file) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            resolve({
-                imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
-                width: img.width,
-                height: img.height
-            });
-        };
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = URL.createObjectURL(file);
-    });
-}
-
-// Re-export F5 utilities for direct access
-export { f5 };
+export const LONG_SIDE = dither.LONG_SIDE;

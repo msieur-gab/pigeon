@@ -107,12 +107,13 @@ export function restoreFromWords(words, name = '') {
 }
 
 // Backup identity to image (soul bird) - returns Promise<{jpegData, blob, dataURL}>
-export async function backupToImage(imageData) {
+// cover: carrier pixels from stego.prepareCarrier
+export async function backupToImage(cover) {
     const id = get();
     if (!id) throw new Error('No identity to backup');
 
-    // Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
-    // Avatar can be set separately after restoring
+    // The avatar is not included (room is limited); the soul bird itself
+    // becomes the avatar when restoring
     const payload = {
         t: 'soul',
         seed: id.seed,
@@ -120,8 +121,7 @@ export async function backupToImage(imageData) {
         v: 1
     };
 
-    // Use F5 encoding for compression resistance
-    return stego.encodeRobust(imageData, payload);
+    return stego.encodeRobust(cover, payload);
 }
 
 // Restore identity from already-decoded payload

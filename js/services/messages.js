@@ -11,7 +11,7 @@ export const TYPE = {
 };
 
 // Create invite payload
-// Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
+// Note: avatar is NOT included (room in a bird is limited)
 // Recipient extracts avatar from carrier image instead
 export function createInvite(message) {
     const myPublicKey = identity.getPublicKey();
@@ -39,7 +39,7 @@ export function createInvite(message) {
 }
 
 // Create claim payload (response to invite)
-// Note: avatar is NOT included - F5 capacity is limited (~1-2KB)
+// Note: avatar is NOT included (room in a bird is limited)
 // Recipient extracts avatar from carrier image instead
 export function createClaim(message, tempKey) {
     const myPublicKey = identity.getPublicKey();

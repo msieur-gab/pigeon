@@ -1,8 +1,8 @@
 // Compact binary payload codec
 //
 // Packs payload objects into raw bytes instead of JSON + base64.
-// Fewer embedded bits means fewer changed DCT coefficients, so images
-// carry longer messages and are a little harder to detect.
+// Fewer hidden bytes means more room in each bird for the text, and fewer
+// changes to its pixels.
 //
 // Layout:  'P' 'G' | version | type | fields...
 

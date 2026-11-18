@@ -4,7 +4,6 @@ import * as messages from './services/messages.js';
 import * as sync from './services/sync.js';
 import * as stego from './utils/stego.js';
 import * as crypto from './utils/crypto.js';
-import { diagnose } from './utils/diagnose.js';
 import * as flock from './services/flock.js';
 import * as stamp from './utils/stamp.js';
 import * as decipher from './utils/decipher.js';
@@ -14,7 +13,7 @@ import * as addSheet from './add-sheet.js';
 import { tapTwice } from './utils/tap-twice.js';
 
 // Shown at the bottom of settings, to check which build is running
-const APP_VERSION = '2026.11.18-4';
+const APP_VERSION = '2026.11.18-5';
 
 // App state
 const state = {
@@ -27,15 +26,17 @@ const state = {
     openStatus: null,         // HTML shown on home after an open attempt
     pendingFile: null,        // Image received before an identity existed
     pendingMeet: null,        // Meet link opened before an identity existed
-    currentBirdId: null       // Flock bird shown as the current carrier
+    currentBirdId: null,      // Flock bird shown as the current carrier
+    cover: null,              // Carrier pixels (1280 px) the message will be hidden in
+    room: 0                   // Bytes the current carrier can hide
 };
 
 // Screens where a dropped/pasted image becomes the carrier
 const CARRIER_SCREENS = {
-    'create-invite': { prefix: 'invite', canvas: 'invite-canvas', btn: 'generate-invite-btn' },
-    'send-message': { prefix: 'send', canvas: 'send-canvas', btn: 'generate-send-btn' },
-    'received-invite': { prefix: 'accept', canvas: 'accept-canvas', btn: 'generate-accept-btn' },
-    'backup': { prefix: 'backup', canvas: 'backup-canvas', btn: 'generate-backup-btn' }
+    'create-invite': { prefix: 'invite', canvas: 'invite-canvas', btn: 'generate-invite-btn', type: 'invite', text: 'invite-message' },
+    'send-message': { prefix: 'send', canvas: 'send-canvas', btn: 'generate-send-btn', type: 'msg', text: 'send-message' },
+    'received-invite': { prefix: 'accept', canvas: 'accept-canvas', btn: 'generate-accept-btn', type: 'claim', text: 'accept-reply' },
+    'backup': { prefix: 'backup', canvas: 'backup-canvas', btn: 'generate-backup-btn', type: 'soul', text: null }
 };
 
 // Show "name (display name)" only when the two differ
@@ -223,7 +224,11 @@ function render() {
     
     attachScreenListeners();
     if (state.screen === 'home') addSheet.bindChoices(app);
-    if (CARRIER_SCREENS[state.screen]) autoPickCarrier();
+    if (CARRIER_SCREENS[state.screen]) {
+        state.cover = null;   // a new screen gets its own bird
+        state.room = 0;
+        autoPickCarrier();
+    }
     if (state.screen === 'settings') renderFlock();
     if (state.screen === 'received-message') setTimeout(revealMessage, 500);
 }
@@ -453,6 +458,7 @@ function renderCreateInvite() {
             <div class="field">
                 <label>first message</label>
                 <textarea id="invite-message">Hey! Use this to contact me securely...</textarea>
+                ${renderRoom('invite')}
             </div>
             ${renderCarrierChooser('invite')}
             <input type="file" id="invite-image-input" accept="image/*">
@@ -482,6 +488,7 @@ function renderSendMessage() {
             <div class="field">
                 <label>message</label>
                 <textarea id="send-message" placeholder="Your message..."></textarea>
+                ${renderRoom('send')}
             </div>
             ${renderCarrierChooser('send')}
             <input type="file" id="send-image-input" accept="image/*">
@@ -521,6 +528,7 @@ function renderReceivedInvite() {
             <div class="field">
                 <label>reply message</label>
                 <textarea id="accept-reply" placeholder="Got your invite!"></textarea>
+                ${renderRoom('accept')}
             </div>
             ${renderCarrierChooser('accept')}
             <input type="file" id="accept-image-input" accept="image/*">
@@ -673,20 +681,46 @@ function anotherBird() {
     autoPickCarrier(state.currentBirdId);
 }
 
-// Hidden messages only survive if the image travels untouched.
+// One way for every image: share it like any photo.
 // Hidden until the actions row above it is shown (sibling rule in CSS).
 function renderSendTip() {
     return `
         <div class="status info send-tip">
-            <p class="mb-1"><strong>Send it as a file, not a photo.</strong> Apps compress photos, which erases the message.</p>
-            <ul class="tip-list">
-                <li>Telegram: 📎 → File</li>
-                <li>WhatsApp: 📎 → Document</li>
-                <li>Signal: 📎 → File</li>
-                <li>Email: attach the image</li>
-            </ul>
+            <p><strong>Share it like any photo</strong>, with Share or in WhatsApp or Telegram: the message survives their compression. Cropping, editing or a screenshot erases it.</p>
         </div>
     `;
+}
+
+// How much text still fits in the current bird (filled by updateRoom)
+function renderRoom(prefix) {
+    return `<p class="text-small text-muted room-left" id="${prefix}-room" aria-live="polite"></p>`;
+}
+
+function updateRoom() {
+    const carrier = CARRIER_SCREENS[state.screen];
+    const el = carrier && document.getElementById(`${carrier.prefix}-room`);
+    if (!el) return;
+    const btn = document.getElementById(carrier.btn);
+    if (!state.cover) { el.textContent = ''; return; }
+    const text = carrier.text ? document.getElementById(carrier.text)?.value.trim() : '';
+    const left = stego.textLeft(state.room, carrier.type, identity.getName(), text);
+    el.classList.toggle('room-over', left < 0);
+    if (btn) btn.disabled = left < 0;
+    if (carrier.type === 'soul') {
+        el.textContent = left < 0 ? 'This photo is too plain to hold your identity. Try another one.' : '';
+    } else if (left >= 0) {
+        el.textContent = `${left} character${left === 1 ? '' : 's'} left in this bird`;
+    } else {
+        el.textContent = `${-left} character${left === -1 ? '' : 's'} too many for this bird. Shorten it, or try another bird.`;
+    }
+}
+
+function carrierError(message) {
+    const carrier = CARRIER_SCREENS[state.screen];
+    const el = carrier && document.getElementById(`${carrier.prefix}-room`);
+    if (!el) { alert(message); return; }
+    el.classList.add('room-over');
+    el.textContent = message;
 }
 
 function renderBackup() {
@@ -704,13 +738,14 @@ function renderBackup() {
             <h2>soul bird</h2>
             <p class="mb-1">Create an image that contains your identity.</p>
             ${renderCarrierChooser('backup')}
+            ${renderRoom('backup')}
             <input type="file" id="backup-image-input" accept="image/*">
             <canvas id="backup-canvas" class="hidden"></canvas>
             <button class="btn btn-block hidden" id="generate-backup-btn" onclick="window.app.generateBackup()">Generate soul bird</button>
             <img id="backup-output" class="hidden output-image" alt="Soul bird">
             <a id="backup-download" class="btn btn-block hidden" download="soul-bird.jpg">Save soul bird</a>
             <div class="status info hidden" id="backup-tip">
-                Keep it as an untouched file. Editing, cropping, screenshots or sending it as a photo erase the identity inside.
+                Keep it private, like your recovery words: anyone with this picture can restore your identity. It can travel as a photo; cropping, editing or a screenshot erase what's inside.
             </div>
         </div>
     `;
@@ -749,6 +784,10 @@ function setupEventListeners() {
 }
 
 function attachScreenListeners() {
+    // Typing in a carrier screen updates how much still fits in the bird
+    const carrier = CARRIER_SCREENS[state.screen];
+    if (carrier?.text) document.getElementById(carrier.text)?.addEventListener('input', updateRoom);
+
     // Setup checkbox enables continue button
     const checkbox = document.getElementById('words-saved');
     const continueBtn = document.getElementById('continue-btn');
@@ -877,40 +916,35 @@ function loadImageToCanvas(e, canvasId, btnId) {
     loadFileToCanvas(file, canvasId, btnId);
 }
 
-// Draw the carrier, with a small random crop (up to ~6% per side) so two
-// images made from the same photo never share the same pixels or JPEG
-// block grid, then fit within 800x600.
-function loadFileToCanvas(file, canvasId, btnId) {
-    return new Promise((resolve) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-            URL.revokeObjectURL(url);
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return resolve();
-            const ctx = canvas.getContext('2d');
+// Prepare the carrier: 1280 px on its long side with a small random crop
+// (up to ~6% per side, so two images from the same photo never share the
+// same pixels or block grid). The message goes into these pixels; the
+// visible canvas only shows a preview, fitted within 800x600.
+async function loadFileToCanvas(file, canvasId, btnId) {
+    let carrier;
+    try {
+        carrier = await stego.prepareCarrier(file);
+    } catch {
+        alert('Could not read this image');
+        return;
+    }
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    state.cover = carrier.cover;
+    state.room = carrier.room;
 
-            const cut = (size) => Math.floor(Math.random() * size * 0.06);
-            const sx = cut(img.width), sy = cut(img.height);
-            const sw = img.width - sx - cut(img.width);
-            const sh = img.height - sy - cut(img.height);
+    const full = document.createElement('canvas');
+    full.width = carrier.cover.width;
+    full.height = carrier.cover.height;
+    full.getContext('2d').putImageData(carrier.cover, 0, 0);
+    const scale = Math.min(1, 800 / full.width, 600 / full.height);
+    canvas.width = Math.max(1, Math.floor(full.width * scale));
+    canvas.height = Math.max(1, Math.floor(full.height * scale));
+    canvas.getContext('2d').drawImage(full, 0, 0, canvas.width, canvas.height);
 
-            const scale = Math.min(1, 800 / sw, 600 / sh);
-            canvas.width = Math.max(1, Math.floor(sw * scale));
-            canvas.height = Math.max(1, Math.floor(sh * scale));
-            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-
-            canvas.classList.remove('hidden');
-            document.getElementById(btnId)?.classList.remove('hidden');
-            resolve();
-        };
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            alert('Could not read this image');
-            resolve();
-        };
-        img.src = url;
-    });
+    canvas.classList.remove('hidden');
+    document.getElementById(btnId)?.classList.remove('hidden');
+    updateRoom();
 }
 
 async function handleOpenImage(e) {
@@ -993,24 +1027,24 @@ function showOpenStatus(html) {
     }
 }
 
+// Why an image didn't open. Pigeon birds are 1280 px on their long side;
+// a different size means it was resized, cropped or screenshotted on the
+// way, which erases the message. Compression alone doesn't.
 async function explainNoMessage(file) {
-    const result = await diagnose(file);
-    const resend = `Ask the sender to send it again <strong>as a file</strong> (Telegram: 📎 → File · WhatsApp: 📎 → Document).`;
-
-    if (result.kind === 'not-jpeg') {
-        return `<div class="status error">
-            <p><strong>No message found.</strong> This image isn't a JPEG, so it was converted somewhere along the way (a screenshot, copy-paste or edit). ${resend}</p>
-        </div>`;
+    const resend = 'Ask the sender to share it again straight from Pigeon.';
+    let size;
+    try {
+        size = await stego.loadImage(file);
+    } catch {
+        return `<div class="status error"><p><strong>Could not read this image.</strong></p></div>`;
     }
-    if (result.kind === 'compressed') {
-        const by = result.app ? esc(result.app) : 'a messaging app';
-        const q = result.quality ? ` (quality ≈ ${result.quality})` : '';
+    if (Math.max(size.width, size.height) !== stego.LONG_SIDE) {
         return `<div class="status error">
-            <p><strong>No message found.</strong> This picture looks compressed by ${by}${q}, which erases hidden messages. ${resend}</p>
+            <p><strong>No message found.</strong> This picture is ${size.width}×${size.height}: it was resized, cropped or screenshotted on the way, which erases hidden messages. ${resend}</p>
         </div>`;
     }
     return `<div class="status info">
-        <p><strong>No Pigeon message in this image.</strong> If it came through a messaging app, it may have been compressed. ${resend}</p>
+        <p><strong>No Pigeon message in this image.</strong> If it is a Pigeon bird, it may have been edited on the way. ${resend}</p>
     </div>`;
 }
 
@@ -1147,20 +1181,15 @@ async function generateInvite() {
 
     if (!name) { alert('Please enter a contact name'); return; }
     if (!message) { alert('Please enter a message'); return; }
-
-    const canvas = document.getElementById('invite-canvas');
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (!state.cover) return;
 
     try {
         const { payload, tempKey } = messages.createInvite(message);
 
-        // Save pending invite
+        // Hide it first: nothing is saved if the bird can't carry it
+        const result = await stego.encodeRobust(state.cover, payload);
         contacts.addPending(name, tempKey);
         sync.scheduleSync();
-
-        // F5 encoding (JPEG output - compression resistant)
-        const result = await stego.encodeRobust(imageData, payload);
         flock.markUsed(state.currentBirdId);
 
         // Store raw bytes for sharing (created fresh in share handler)
@@ -1173,7 +1202,7 @@ async function generateInvite() {
         download.href = result.dataURL;
         document.getElementById('invite-actions').classList.remove('hidden');
     } catch (err) {
-        alert('Error: ' + err.message);
+        carrierError(err.message);
     }
 }
 
@@ -1181,16 +1210,11 @@ async function generateMessage() {
     const message = document.getElementById('send-message').value.trim();
 
     if (!message) { alert('Please enter a message'); return; }
-
-    const canvas = document.getElementById('send-canvas');
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (!state.cover) return;
 
     try {
         const payload = messages.createMessage(message, state.currentContact.publicKey);
-
-        // F5 encoding (JPEG output - compression resistant)
-        const result = await stego.encodeRobust(imageData, payload);
+        const result = await stego.encodeRobust(state.cover, payload);
         recordExchange(state.currentContact.publicKey, 'out');
         flock.markUsed(state.currentBirdId);
 
@@ -1204,7 +1228,7 @@ async function generateMessage() {
         download.href = result.dataURL;
         document.getElementById('send-actions').classList.remove('hidden');
     } catch (err) {
-        alert('Error: ' + err.message);
+        carrierError(err.message);
     }
 }
 
@@ -1214,13 +1238,13 @@ async function generateAccept() {
 
     if (!name) { alert('Please enter a name'); return; }
     if (!reply) { alert('Please enter a reply'); return; }
-
-    const canvas = document.getElementById('accept-canvas');
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (!state.cover) return;
 
     try {
         const payload = messages.createClaim(reply, state.receivedPayload.tempKey);
+
+        // Hide it first: nothing is saved if the bird can't carry it
+        const result = await stego.encodeRobust(state.cover, payload);
 
         // Extract avatar from the carrier image they sent us
         const avatar = state.receivedImageData
@@ -1233,9 +1257,6 @@ async function generateAccept() {
         // Mark as processed
         messages.markProcessed(state.receivedPayload.hash);
         sync.scheduleSync();
-
-        // F5 encoding (JPEG output - compression resistant)
-        const result = await stego.encodeRobust(imageData, payload);
         recordExchange(state.receivedPayload.fromPublicKey, 'out');
         flock.markUsed(state.currentBirdId);
 
@@ -1249,18 +1270,15 @@ async function generateAccept() {
         download.href = result.dataURL;
         document.getElementById('accept-actions').classList.remove('hidden');
     } catch (err) {
-        alert('Error: ' + err.message);
+        carrierError(err.message);
     }
 }
 
 async function generateBackup() {
-    const canvas = document.getElementById('backup-canvas');
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (!state.cover) return;
 
     try {
-        // F5 encoding (JPEG output - compression resistant)
-        const result = await identity.backupToImage(imageData);
+        const result = await identity.backupToImage(state.cover);
         flock.markUsed(state.currentBirdId);
 
         showResult('backup', result.dataURL);
@@ -1270,7 +1288,7 @@ async function generateBackup() {
         download.classList.remove('hidden');
         document.getElementById('backup-tip').classList.remove('hidden');
     } catch (err) {
-        alert('Error: ' + err.message);
+        carrierError(err.message);
     }
 }
 

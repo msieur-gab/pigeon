@@ -6,7 +6,7 @@ import { squareJpeg } from '../utils/image.js';
 
 const DB_NAME = 'pigeon';
 const STORE = 'flock';
-const MAX_EDGE = 1200;   // stored size; carriers are drawn at max 800x600
+const MAX_EDGE = 1600;   // stored size; carriers are made at 1280 px after a small crop
 const THUMB = 96;
 
 let dbPromise = null;

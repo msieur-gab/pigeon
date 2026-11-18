@@ -777,3 +777,7 @@ body.sheet-open .fab {
     color: var(--bg);
     border-color: var(--fg);
 }
+
+/* How much text still fits in the bird */
+.room-left { margin: 0.35rem 0 0; min-height: 1.2em; }
+.room-left.room-over { color: var(--fg); font-weight: 600; }

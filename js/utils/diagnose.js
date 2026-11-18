@@ -1,9 +1,5 @@
-// Explain why an image didn't open.
-//
-// Hidden messages live in the exact JPEG data. When a messaging app sends a
-// picture "as a photo", it re-encodes it and the message is gone. We can't
-// recover it, but we can usually tell the user what happened, so they know
-// to ask for the image again as a file.
+// Estimate the JPEG quality an image was saved at (used by the lab's checker
+// to show how hard WhatsApp or Telegram compressed a received bird).
 
 // Standard JPEG luminance quantisation table (IJG / Annex K). Only the sum
 // is used, so zigzag vs natural order doesn't matter.
@@ -13,17 +9,6 @@ const STD_LUMA_SUM = [
     18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113, 92,
     49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99
 ].reduce((a, b) => a + b, 0);
-
-// Pigeon writes JPEGs at quality 0.92; anything clearly below that was
-// re-encoded by something else.
-const COMPRESSED_BELOW = 90;
-
-// Filenames messaging apps give to images they have compressed
-const APP_PATTERNS = [
-    { app: 'WhatsApp', re: /-WA\d+/i },
-    { app: 'Telegram', re: /^photo_\d{4}-\d{2}-\d{2}/i },
-    { app: 'Signal', re: /^signal-\d{4}-\d{2}-\d{2}/i }
-];
 
 /**
  * Estimate JPEG quality (1-100) from the first quantisation table.
@@ -56,23 +41,4 @@ export function estimateJpegQuality(bytes) {
         i += 2 + len;
     }
     return null;
-}
-
-/**
- * Work out the most likely reason an image held no readable message.
- * @param {File} file
- * @returns {Promise<{kind: 'not-jpeg'|'compressed'|'no-message', app?: string, quality?: number}>}
- */
-export async function diagnose(file) {
-    const head = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer());
-    const isJpeg = head[0] === 0xFF && head[1] === 0xD8;
-    if (!isJpeg) return { kind: 'not-jpeg' };
-
-    const quality = estimateJpegQuality(head);
-    const match = APP_PATTERNS.find(p => p.re.test(file.name || ''));
-
-    if (match || (quality !== null && quality < COMPRESSED_BELOW)) {
-        return { kind: 'compressed', app: match?.app, quality };
-    }
-    return { kind: 'no-message', quality };
 }
