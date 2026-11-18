@@ -177,8 +177,9 @@ keeps the value on that grid. At least 9 copies per bit, majority vote.
 3. **Add Reed-Solomon** instead of plain repetition (more room for the same
    safety; would have fixed the rust case).
 4. ~~Prototype mid-frequency AC dither modulation~~ done (round 2): it wins.
-   Next: port it to the lab page (`lab/dither.js`), real Telegram and
-   WhatsApp sends, Gab judges by eye.
+   Ported to the lab page (`lab/dither.js`); simulated q87/q62 pass on four
+   birds through the page. Next: real Telegram and WhatsApp sends, Gab judges
+   by eye.
 5. **Real-app quality check**: measure the actual JPEG quality and size
    Telegram and WhatsApp deliver (the lab's checker prints both), to tune the
    margin.

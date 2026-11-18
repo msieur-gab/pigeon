@@ -2,14 +2,19 @@
 
 Full write-up, research and next tests: `docs/share-safe-research.md`.
 
-`lab/index.html` makes the same bird two ways at 1280 px and checks images
-you receive back:
+`lab/index.html` makes the same bird three ways at 1280 px (flip between
+Original / F5 / Brightness / Dither in one viewer) and checks images you
+receive back with all three readers:
 
 - **F5**: what the app does today (hides in exact JPEG coefficients).
 - **Brightness**: one bit per 8×8 block, by nudging the block's average
   brightness onto a 6-level grid (±3 levels at most), each bit written 5 times
   across the image (`lab/brightness.js`; same idea as Phasm's Fortress mode,
   written from scratch).
+
+- **Dither**: five mid-frequency DCT values per textured 8×8 block set to
+  the quality-62 grid, parity = bit, at least 9 copies (`lab/dither.js`;
+  DMAS-style, written from scratch). Smooth areas never touched.
 
 Text is not encrypted here; it's a test of survival and looks.
 

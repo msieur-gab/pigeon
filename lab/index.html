@@ -7,15 +7,19 @@
     <link rel="stylesheet" href="../css/style.css">
     <script src="../js/vendor/f5stego.min.js"></script>
     <style>
-        .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-        .pair figure { margin: 0; }
-        .pair img, .solo img { width: 100%; display: block; border: 1px solid var(--border); border-radius: var(--radius); touch-action: manipulation; }
-        .pair figcaption { font-size: 0.75rem; color: var(--muted); margin: 0.25rem 0 0.5rem; line-height: 1.35; }
-        .pair .actions { margin-top: 0; gap: 0.25rem; }
-        .pair .actions .btn { padding: 0.35rem 0.25rem; font-size: 0.8125rem; }
+        .viewer img { width: 100%; display: block; border: 1px solid var(--border); border-radius: var(--radius); }
+        .tabs { display: flex; border: 1px solid var(--fg); border-radius: var(--radius); overflow: hidden; margin: 0.75rem 0 0.5rem; }
+        .tabs button { flex: 1; border: none; border-radius: 0; padding: 0.4rem 0.2rem; font-size: 0.8125rem; }
+        .tabs button + button { border-left: 1px solid var(--fg); }
+        .tabs button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
         .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; font-size: 0.875rem; }
-        .row label { display: flex; gap: 0.35rem; align-items: center; }
-        .solo { margin-top: 0.75rem; }
+        .row label { display: flex; gap: 0.35rem; align-items: center; white-space: nowrap; }
+        .row input[type="checkbox"] { width: auto; margin: 0; }
+        .method { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0; border-top: 1px solid var(--border); }
+        .method .info { flex: 1; font-size: 0.8125rem; line-height: 1.35; }
+        .method .info strong { display: block; font-weight: normal; font-size: 0.9375rem; }
+        .method .info span { color: var(--muted); }
+        .method .btn { padding: 0.35rem 0.6rem; font-size: 0.8125rem; }
         .result { font-size: 0.875rem; margin: 0.25rem 0; }
         .ok { color: #1a7f37; }
         .bad { color: #c62828; }
@@ -29,8 +33,8 @@
     <header><h1>pigeon lab · share-safe test</h1></header>
 
     <div class="card">
-        <h2>1. make both</h2>
-        <p class="text-muted text-small mb-1">The same bird and the same text, hidden two ways, both at 1280 px. Test only: the text is not encrypted here.</p>
+        <h2>1. make all three</h2>
+        <p class="text-muted text-small mb-1">The same bird and the same text, hidden three ways, all at 1280 px. Test only: the text is not encrypted here.</p>
         <button class="btn btn-block mb-1" id="pick">Choose a bird</button>
         <input type="file" id="pick-input" accept="image/*">
         <div class="field">
@@ -38,45 +42,37 @@
             <textarea id="msg">Meet me at the old bridge at seven. Bring the blue notebook and come alone.</textarea>
         </div>
         <p class="mono-small" id="room"></p>
-        <button class="btn btn-block" id="make" disabled>Make both</button>
+        <button class="btn btn-block" id="make" disabled>Make all three</button>
+
         <div id="made" class="hidden">
+            <div class="tabs" role="tablist">
+                <button data-view="orig" aria-pressed="true">Original</button>
+                <button data-view="f5" aria-pressed="false">F5</button>
+                <button data-view="br" aria-pressed="false">Brightness</button>
+                <button data-view="dm" aria-pressed="false">Dither</button>
+            </div>
+            <div class="viewer"><img id="view" alt="bird"></div>
             <div class="row">
                 <label><input type="checkbox" id="diff"> show changes ×10</label>
-                <span class="mono-small">Press and hold a picture to see the original.</span>
+                <span class="mono-small">Flip between the tabs to compare.</span>
             </div>
-            <div class="pair">
-                <figure>
-                    <img id="img-f5" alt="F5">
-                    <figcaption id="cap-f5"></figcaption>
-                    <div class="actions">
-                        <button class="btn" data-share="f5">Share</button>
-                        <a class="btn" id="save-f5" download="bird-f5.jpg">Save</a>
-                    </div>
-                </figure>
-                <figure>
-                    <img id="img-br" alt="Brightness">
-                    <figcaption id="cap-br"></figcaption>
-                    <div class="actions">
-                        <button class="btn" data-share="br">Share</button>
-                        <a class="btn" id="save-br" download="bird-brightness.jpg">Save</a>
-                    </div>
-                </figure>
-            </div>
+            <div id="methods"></div>
         </div>
     </div>
 
     <div class="card">
         <h2>2. check a received image</h2>
-        <p class="text-muted text-small mb-1">Save the bird you received in Telegram or WhatsApp, then open it here. Both methods are tried.</p>
+        <p class="text-muted text-small mb-1">Save the bird you received in Telegram or WhatsApp, then open it here. All three readers are tried.</p>
         <button class="btn btn-block" id="check">Open a received image</button>
         <input type="file" id="check-input" accept="image/*">
         <div id="checked"></div>
     </div>
-    <p class="mono-small"><a href="../">back to the app</a></p>
+    <p class="mono-small"><a href="../">back to the app</a> · notes: <a href="../docs/share-safe-research.md">share-safe-research.md</a></p>
 </div>
 
 <script type="module">
     import * as br from './brightness.js';
+    import * as dm from './dither.js';
     import { estimateJpegQuality } from '../js/utils/diagnose.js';
 
     const theme = localStorage.getItem('pigeon_theme') || 'light';
@@ -88,18 +84,25 @@
     const $ = id => document.getElementById(id);
     const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-    let cover = null;      // ImageData at 1280 px
-    let original = '';     // data URL of the cover (for press-and-hold)
-    const out = {};        // { f5: {blob, url, diffUrl}, br: {...} }
+    const NAMES = { f5: 'F5 (today)', br: 'Brightness', dm: 'Dither' };
+    const NOTES = {
+        f5: 'breaks if sent as a photo',
+        br: 'average brightness of 8×8 squares',
+        dm: 'mid-scale detail, textured areas only'
+    };
+
+    let cover = null;          // ImageData at 1280 px
+    let roomBr = 0, roomDm = 0;
+    let view = 'orig';
+    const out = {};            // { orig|f5|br|dm: {blob?, url, diff?, note?, error?} }
 
     // ---------- helpers ----------
     function loadImg(file) {
         return new Promise((res, rej) => {
-            const url = URL.createObjectURL(file);
             const img = new Image();
             img.onload = () => res(img);
             img.onerror = () => rej(new Error('Not an image'));
-            img.src = url;
+            img.src = URL.createObjectURL(file);
         });
     }
     function toCanvas(imageData) {
@@ -118,9 +121,9 @@
         ctx.drawImage(img, 0, 0);
         return { data: ctx.getImageData(0, 0, c.width, c.height), img };
     }
+    const copyOf = d => new ImageData(new Uint8ClampedArray(d.data), d.width, d.height);
     function crcFrame(text) {
-        const t = enc.encode(text);
-        const crc = br.crc32(t);
+        const t = enc.encode(text), crc = br.crc32(t);
         const b = new Uint8Array(t.length + 4);
         b.set(t);
         b.set([crc >>> 24, (crc >>> 16) & 255, (crc >>> 8) & 255, crc & 255], t.length);
@@ -143,87 +146,113 @@
         return toCanvas(d).toDataURL('image/jpeg', 0.9);
     }
 
-    // ---------- 1. make both ----------
+    // ---------- 1. make all three ----------
     $('pick').onclick = () => $('pick-input').click();
     $('pick-input').onchange = async e => {
         const f = e.target.files[0];
         if (!f) return;
         cover = br.prepareCover(await loadImg(f));
-        original = toCanvas(cover).toDataURL('image/jpeg', 0.95);
+        roomBr = br.capacityFor(cover.width, cover.height);
+        roomDm = dm.capacityFor(cover);
         $('pick').textContent = `Bird: ${f.name} → ${cover.width}×${cover.height}`;
         $('make').disabled = false;
         updateRoom();
+        e.target.value = '';
     };
     $('msg').oninput = updateRoom;
     function updateRoom() {
         if (!cover) return;
         const used = enc.encode($('msg').value).length;
-        const room = br.capacityFor(cover.width, cover.height);
-        $('room').textContent = `${used} of ${room} bytes (brightness room at this size)`;
+        $('room').textContent = `${used} bytes · room in this bird: brightness ${roomBr}, dither ${roomDm}`;
     }
 
     $('make').onclick = async () => {
         const text = $('msg').value;
+        const bytes = enc.encode(text);
         $('make').disabled = true;
         $('make').textContent = 'Making…';
         try {
+            Object.values(out).forEach(o => o.url?.startsWith('blob:') && URL.revokeObjectURL(o.url));
+            out.orig = { url: URL.createObjectURL(await toBlob(toCanvas(cover), 0.95)) };
+
             // F5: plain JPEG at the app's quality, then F5 on its coefficients
-            const plain = await bytesOf(await toBlob(toCanvas(cover), QUALITY));
-            const payload = crcFrame(text);
-            const framed = new Uint8Array(4 + payload.length);
-            framed.set([payload.length >>> 24, (payload.length >>> 16) & 255, (payload.length >>> 8) & 255, payload.length & 255]);
-            framed.set(payload, 4);
-            const f5Bytes = new f5stego(F5_KEY).embed(plain, framed);
-            const f5Blob = new Blob([f5Bytes], { type: 'image/jpeg' });
+            try {
+                const plain = await bytesOf(await toBlob(toCanvas(cover), QUALITY));
+                const payload = crcFrame(text);
+                const framed = new Uint8Array(4 + payload.length);
+                framed.set([payload.length >>> 24, (payload.length >>> 16) & 255, (payload.length >>> 8) & 255, payload.length & 255]);
+                framed.set(payload, 4);
+                const blob = new Blob([new f5stego(F5_KEY).embed(plain, framed)], { type: 'image/jpeg' });
+                out.f5 = { blob, note: NOTES.f5 };
+            } catch (err) { out.f5 = { error: err?.message || String(err) }; }
 
             // Brightness: change the pixels, then a normal JPEG
-            const copy = new ImageData(new Uint8ClampedArray(cover.data), cover.width, cover.height);
-            br.embed(copy, enc.encode(text));
-            const brBlob = await toBlob(toCanvas(copy), QUALITY);
+            try {
+                const c = copyOf(cover);
+                br.embed(c, bytes);
+                out.br = { blob: await toBlob(toCanvas(c), QUALITY), note: NOTES.br };
+            } catch (err) { out.br = { error: err.message }; }
 
-            for (const [k, blob] of [['f5', f5Blob], ['br', brBlob]]) {
-                if (out[k]?.url) URL.revokeObjectURL(out[k].url);
-                out[k] = { blob, url: URL.createObjectURL(blob), diff: await diffUrl(blob) };
-                $(`img-${k}`).src = out[k].url;
-                $(`save-${k}`).href = out[k].url;
+            // Dither: change mid-scale detail in textured squares, then a normal JPEG
+            try {
+                const c = copyOf(cover);
+                const info = dm.embed(c, bytes);
+                out.dm = {
+                    blob: await toBlob(toCanvas(c), QUALITY),
+                    note: `${NOTES.dm} · ${Math.round(info.touched * 100)}% of squares touched, ${info.copies} copies per bit`
+                };
+            } catch (err) { out.dm = { error: err.message }; }
+
+            for (const k of ['f5', 'br', 'dm']) {
+                if (!out[k].blob) continue;
+                out[k].url = URL.createObjectURL(out[k].blob);
+                out[k].diff = await diffUrl(out[k].blob);
             }
-            $('cap-f5').textContent = `F5 (today) · ${(f5Blob.size / 1024).toFixed(0)} KB · breaks if sent as a photo`;
-            const used = (enc.encode(text).length + 7) * 8 * 5;
-            const total = (cover.width >> 3) * (cover.height >> 3);
-            $('cap-br').textContent = `Brightness · ${(brBlob.size / 1024).toFixed(0)} KB · ${Math.round(used / total * 100)}% of blocks touched · should survive`;
+            renderMethods();
             $('diff').checked = false;
+            setView('dm');
             $('made').classList.remove('hidden');
         } catch (err) {
             alert('Error: ' + (err?.message || err));
         } finally {
             $('make').disabled = false;
-            $('make').textContent = 'Make both';
+            $('make').textContent = 'Make all three';
         }
     };
 
-    $('diff').onchange = () => {
-        for (const k of ['f5', 'br']) $(`img-${k}`).src = $('diff').checked ? out[k].diff : out[k].url;
-    };
-    for (const k of ['f5', 'br']) {
-        const img = $(`img-${k}`);
-        const show = () => { if (original) img.src = original; };
-        const back = () => { img.src = $('diff').checked ? out[k].diff : out[k].url; };
-        img.addEventListener('pointerdown', show);
-        img.addEventListener('pointerup', back);
-        img.addEventListener('pointerleave', back);
-        img.addEventListener('contextmenu', e => e.preventDefault());
+    function renderMethods() {
+        $('methods').innerHTML = ['f5', 'br', 'dm'].map(k => {
+            const o = out[k];
+            if (o.error) return `<div class="method"><div class="info"><strong>${NAMES[k]}</strong><span class="bad">${esc(o.error)}</span></div></div>`;
+            return `
+                <div class="method">
+                    <div class="info"><strong>${NAMES[k]}</strong><span>${(o.blob.size / 1024).toFixed(0)} KB · ${esc(o.note)}</span></div>
+                    <button class="btn" data-share="${k}">Share</button>
+                    <a class="btn" href="${o.url}" download="bird-${k}.jpg">Save</a>
+                </div>`;
+        }).join('');
+        document.querySelectorAll('[data-share]').forEach(b => b.onclick = () => share(b.dataset.share));
     }
 
-    document.querySelectorAll('[data-share]').forEach(b => b.onclick = async () => {
-        const k = b.dataset.share;
-        const file = new File([out[k].blob], k === 'f5' ? 'bird-f5.jpg' : 'bird-brightness.jpg', { type: 'image/jpeg' });
+    function setView(k) {
+        view = k;
+        document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === k)));
+        const o = out[k];
+        if (!o || o.error) { $('view').src = out.orig.url; return; }
+        $('view').src = $('diff').checked && o.diff ? o.diff : o.url;
+    }
+    document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+    $('diff').onchange = () => setView(view);
+
+    async function share(k) {
+        const file = new File([out[k].blob], `bird-${k}.jpg`, { type: 'image/jpeg' });
         try {
             if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
             else alert('Sharing files is not available here. Use Save.');
         } catch (e) {
             if (e.name !== 'AbortError') alert(e.message);
         }
-    });
+    }
 
     // ---------- 2. check a received image ----------
     $('check').onclick = () => $('check-input').click();
@@ -233,31 +262,34 @@
         const bytes = await bytesOf(f);
         const q = (() => { try { return estimateJpegQuality(bytes); } catch { return null; } })();
         const { data, img } = await imageDataOf(f);
-        const lines = [`<p class="mono-small">${esc(f.name)} · ${img.naturalWidth}×${img.naturalHeight} · ${(f.size / 1024).toFixed(0)} KB${q ? ` · JPEG quality ≈ ${q}` : ''}</p>`];
+        const resized = Math.max(img.naturalWidth, img.naturalHeight) !== br.LONG_SIDE;
+        const lines = [`<p class="mono-small">${esc(f.name)} · ${img.naturalWidth}×${img.naturalHeight} · ${(f.size / 1024).toFixed(0)} KB${q ? ` · JPEG quality ≈ ${q}` : ''}${resized ? ' · resized by the app' : ''}</p>`];
+        let text = null;
 
         // F5
-        let f5text = null;
         try {
             const x = new f5stego(F5_KEY).extract(bytes);
             const len = (x[0] << 24) | (x[1] << 16) | (x[2] << 8) | x[3];
-            if (len > 0 && len <= x.length - 4) f5text = checkFrame(x.slice(4, 4 + len));
+            if (len > 0 && len <= x.length - 4) text = checkFrame(x.slice(4, 4 + len));
         } catch { /* nothing found */ }
-        lines.push(f5text !== null
+        lines.push(text !== null
             ? `<p class="result ok">F5: ✓ message intact</p>`
             : `<p class="result bad">F5: ✗ nothing readable</p>`);
 
-        // Brightness: read at the received size; if the app resized it, scale back to 1280 first
-        let r = br.extract(data);
-        let note = '';
-        if (!r.ok && Math.max(img.naturalWidth, img.naturalHeight) !== br.LONG_SIDE) {
-            const back = br.prepareCover(img);
-            const r2 = br.extract(back);
-            if (r2.ok || r2.rawErrors < r.rawErrors) { r = r2; note = ' (after scaling back to 1280 px)'; }
+        // Brightness and dither: read at the received size; if the app
+        // resized it, also try after scaling back to 1280 px
+        const scaled = resized ? br.prepareCover(img) : null;
+        for (const [k, mod] of [['br', br], ['dm', dm]]) {
+            let r = mod.extract(data), note = '';
+            if (!r.ok && scaled) {
+                const r2 = mod.extract(scaled);
+                if (r2.ok || r2.rawErrors < r.rawErrors) { r = r2; note = ' (after scaling back to 1280 px)'; }
+            }
+            lines.push(r.ok
+                ? `<p class="result ok">${NAMES[k]}: ✓ message intact · ${(r.rawErrors * 100).toFixed(1)}% of hidden copies damaged, all repaired${note}</p>`
+                : `<p class="result bad">${NAMES[k]}: ✗ ${esc(r.reason)}${note}</p>`);
+            if (r.ok && text === null) text = dec.decode(r.bytes);
         }
-        lines.push(r.ok
-            ? `<p class="result ok">Brightness: ✓ message intact · ${(r.rawErrors * 100).toFixed(1)}% of hidden bits damaged, all repaired${note}</p>`
-            : `<p class="result bad">Brightness: ✗ ${esc(r.reason)} · ${(r.rawErrors * 100).toFixed(1)}% of hidden bits damaged${note}</p>`);
-        const text = f5text ?? (r.ok ? dec.decode(r.bytes) : null);
         if (text !== null) lines.push(`<div class="message-preview message-text">${esc(text)}</div>`);
         $('checked').innerHTML = lines.join('');
         e.target.value = '';
